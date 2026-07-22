@@ -1,0 +1,9 @@
+/* print.css — 브라우저 인쇄 시(웹 열람용 보조). PDF는 pdf.js가 전용 레이아웃 생성 */
+@media print {
+  .sidebar, .head-actions, .filter-chips, .date-nav, .add-task, .add-step,
+  .only-edit, #btn-panel, .back-link, .seg { display: none !important; }
+  body { background: #fff; overflow: visible; }
+  .content { overflow: visible; }
+  .view { max-width: none; padding: 0; }
+  .card { box-shadow: none; border: 1px solid #ddd; break-inside: avoid; }
+}
