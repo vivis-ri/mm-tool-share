@@ -382,8 +382,8 @@ window.PDF = (function () {
               ? `${it.service.name || '-'} · ${it.process.name || '-'}`
               : `${it.company.name || '-'} · ${it.service.name || '-'}`;
             const meta = isSingle
-              ? `${status} · 담당 ${assigneeText(it.process)}`
-              : `${it.process.name || '-'} · ${status} · 담당 ${assigneeText(it.process)}`;
+              ? `${status}`
+              : `${it.process.name || '-'} · ${status}`;
             return `<div class="cal-item" style="background:${tone.bg};border-color:${tone.line}">
               <div class="cal-item-title"><span class="cal-status" style="background:${statusColor(status)}"></span>${esc(title)}</div>
               <div class="cal-item-meta">${esc(meta)}</div>

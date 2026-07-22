@@ -23,9 +23,11 @@
 .task .drag-handle, .task .flag { flex: 0 0 auto; }
 .task-txt { cursor: pointer; }
 .task.done span { text-decoration: line-through; color: var(--ink-45); }
-.task.deadline { cursor: default; color: var(--st-late); font-weight: 600; }
+.task.deadline { cursor: pointer; color: var(--st-late); font-weight: 600; }
 .task.deadline .flag { font-size: 11px; }
 .task.deadline span { line-height: 1.3; }
+.task.deadline.done { color: var(--st-done); }
+.task.deadline.done span { color: var(--ink-45); }
 .day-col.holiday .day-num, .day-col.holiday .day-dow { color: var(--st-late); }
 .hol-tag { font-size: 10.5px; font-weight: 700; color: var(--st-late); background: var(--st-late-bg); padding: 1px 6px; border-radius: 6px; align-self: flex-start; margin: 0 0 6px 2px; }
 .day-progress { margin: 0 2px 9px; display: flex; flex-direction: column; gap: 4px; }
@@ -66,6 +68,7 @@
 .mtask { font-size: 10.5px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink-70); }
 .mtask.done { color: var(--ink-45); text-decoration: line-through; }
 .mtask.dl { color: var(--st-late); font-weight: 600; }
+.mtask.dl.done { color: var(--ink-45); text-decoration: line-through; }
 .mtask.more { color: var(--ink-45); font-weight: 600; }
 
 /* 반복업무 관리 */

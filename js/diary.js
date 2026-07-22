@@ -21,9 +21,9 @@ window.Diary = (function () {
   function movedFromMemo(date, routineId) { return `${MOVED_FROM_PREFIX}${date};routine:${routineId}`; }
 
   function progressOf(items) {
-    const checkables = items.filter(i => i.type !== 'd');
-    const done = checkables.filter(i => i.done).length;
-    const total = checkables.length;
+    // 마감(프로세스) 항목도 이제 체크 가능 → 진행도에 포함
+    const done = items.filter(i => i.done).length;
+    const total = items.length;
     return { done, total, pct: total ? Math.round(done / total * 100) : 0 };
   }
 
@@ -56,7 +56,8 @@ window.Diary = (function () {
     (data.oneoffs[key] || []).forEach((o, i) => items.push({ type: 'o', id: o.id, title: o.title, done: o.done, ord: o.sort_order ?? (500 + i) }));
     items.sort((a, b) => a.ord - b.ord);
     (data.deadlines[key] || []).forEach(d => items.push({
-      type: 'd', title: `${d.company} · ${d.service} · ${d.stage} 마감`, status: d.status, ord: 9000
+      type: 'd', pid: d.pid, companyId: d.company_id, status: d.status, done: d.status === '종료',
+      title: `${d.company} · ${d.service} · ${d.stage}`, ord: 9000
     }));
     return items;
   }
@@ -103,7 +104,14 @@ window.Diary = (function () {
   }
 
   function taskLabel(it) {
-    if (it.type === 'd') return `<div class="task deadline"><span class="flag">🚩</span><span>${esc(it.title)}</span></div>`;
+    if (it.type === 'd') {
+      // 마감(프로세스) 항목 — 체크하면 그 단계가 '종료'로 바뀌어 프로젝트 현황과 동기화
+      return `<div class="task deadline ${it.done ? 'done' : ''}" data-type="d" data-id="${esc(it.pid)}" data-company="${esc(it.companyId)}" title="체크하면 프로젝트 현황에서 완료(종료)로 반영됩니다">
+        <span class="flag">🚩</span>
+        <input type="checkbox" ${it.done ? 'checked' : ''}>
+        <span class="task-txt">${esc(it.title)}</span>
+      </div>`;
+    }
     return `<div class="task ${it.done ? 'done' : ''}" data-type="${it.type}" data-id="${it.id}" data-title="${esc(it.title)}" data-done="${it.done ? '1' : '0'}">
       <span class="drag-handle only-edit" title="끌어서 순서 변경 또는 다른 날로 이동">⠿</span>
       <input type="checkbox" ${it.done ? 'checked' : ''}>
@@ -169,7 +177,7 @@ window.Diary = (function () {
               ${prog.total ? `<div class="mcell-progress"><i style="width:${prog.pct}%"></i></div>` : ''}
               ${hol ? `<div class="mcell-hol">${esc(hol)}</div>` : ''}
               <div class="mcell-items">
-                ${shown.map(it => `<div class="mtask ${it.type === 'd' ? 'dl' : ''} ${it.done ? 'done' : ''}">${it.type === 'd' ? '🚩' : (it.done ? '☑' : '☐')} ${esc(it.title)}</div>`).join('')}
+                ${shown.map(it => `<div class="mtask ${it.type === 'd' ? 'dl' : ''} ${it.done ? 'done' : ''}">${it.type === 'd' ? (it.done ? '✅' : '🚩') : (it.done ? '☑' : '☐')} ${esc(it.title)}</div>`).join('')}
                 ${rest > 0 ? `<div class="mtask more">+${rest}개 더</div>` : ''}
               </div>
             </div>`;
@@ -200,7 +208,11 @@ window.Diary = (function () {
       cb.addEventListener('change', (e) => {
         e.stopPropagation();
         const t = cb.closest('.task');
-        toggleTask(root, t.dataset.type, t.dataset.id, t.closest('.day-col').dataset.date, cb.checked);
+        if (t.dataset.type === 'd') {
+          toggleDeadline(root, t.dataset.id, t.dataset.company, cb.checked);
+        } else {
+          toggleTask(root, t.dataset.type, t.dataset.id, t.closest('.day-col').dataset.date, cb.checked);
+        }
       }));
     root.querySelectorAll('.task[data-id] .task-txt').forEach(txt =>
       txt.addEventListener('click', () => {
@@ -298,6 +310,17 @@ window.Diary = (function () {
     render(root);
   }
 
+  // 마감(프로세스) 항목 체크 = 그 단계를 '종료'로 → 업체/서비스 상태 롤업(프로젝트 현황과 동기화)
+  async function toggleDeadline(root, pid, companyId, done) {
+    if (DB.READONLY || !pid) return;
+    await DB.update('processes', pid, { status: done ? '종료' : '진행중' });
+    if (companyId && window.Detail && window.Detail.syncCompanyStatus) {
+      try { await window.Detail.syncCompanyStatus(companyId); } catch (e) { console.error(e); }
+    }
+    toast(done ? '완료(종료) 처리했습니다' : '완료를 해제했습니다');
+    render(root);
+  }
+
   async function toggleTask(root, type, id, date, done) {
     if (DB.READONLY) return;
     if (type === 'r') {
@@ -349,7 +372,7 @@ window.Diary = (function () {
       bodyHTML: `
         <div class="day-modal-list">
           ${items.length ? items.map(it => it.type === 'd'
-            ? `<div class="task deadline"><span class="flag">🚩</span><span>${esc(it.title)}</span></div>`
+            ? `<label class="task deadline ${it.done ? 'done' : ''}" data-type="d" data-id="${esc(it.pid)}" data-company="${esc(it.companyId)}"><span class="flag">🚩</span><input type="checkbox" ${it.done ? 'checked' : ''}><span>${esc(it.title)}</span></label>`
             : `<label class="task ${it.done ? 'done' : ''}" data-type="${it.type}" data-id="${it.id}"><input type="checkbox" ${it.done ? 'checked' : ''}><span>${esc(it.title)}</span></label>`
           ).join('') : '<p class="muted">이 날은 할 일이 없습니다.</p>'}
         </div>
@@ -358,7 +381,8 @@ window.Diary = (function () {
       onOpen: (m) => {
         m.querySelectorAll('.task input').forEach(cb => cb.addEventListener('change', async () => {
           const t = cb.closest('.task');
-          await toggleTask(root, t.dataset.type, t.dataset.id, date, cb.checked);
+          if (t.dataset.type === 'd') await toggleDeadline(root, t.dataset.id, t.dataset.company, cb.checked);
+          else await toggleTask(root, t.dataset.type, t.dataset.id, date, cb.checked);
         }));
         m.querySelector('#dm-add')?.addEventListener('click', () => addOneoff(root, date));
       },

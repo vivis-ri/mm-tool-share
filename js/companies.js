@@ -120,6 +120,19 @@ window.Companies = (function () {
     return counts;
   }
 
+  // 업체를 '종료'로 바꿀 때: 그 업체의 모든 서비스·프로세스 단계를 '종료'로 맞춤
+  // → 업무일지의 마감항목(프로세스 기반)도 전부 체크됨(동기화)
+  async function cascadeCompanyDone(companyId) {
+    const services = await DB.list('services', { company_id: companyId });
+    for (const s of services) {
+      if (s.status !== '종료') await DB.update('services', s.id, { status: '종료' });
+      const procs = await DB.list('processes', { service_id: s.id });
+      for (const p of procs) {
+        if (p.status !== '종료') await DB.update('processes', p.id, { status: '종료' });
+      }
+    }
+  }
+
   async function render(root) {
     if (window.App && window.App.refreshSidebar) window.App.refreshSidebar();
     // 업체 상세가 열려 있으면 상세 화면으로 위임
@@ -426,7 +439,10 @@ window.Companies = (function () {
         e.stopPropagation();
         UI.statusPicker(sbtn, sbtn.textContent.trim(), async (s) => {
           await DB.update('companies', id, { status: s });
-          UI.toast('상태를 변경했습니다'); render(root);
+          // 업체를 '종료'로 바꾸면 전체 단계·서비스도 완료(종료) 처리 → 업무일지 마감항목 체크와 동기화
+          if (s === '종료') { await cascadeCompanyDone(id); UI.toast('업체와 모든 단계를 완료(종료) 처리했습니다'); }
+          else UI.toast('상태를 변경했습니다');
+          render(root);
         });
       });
     });

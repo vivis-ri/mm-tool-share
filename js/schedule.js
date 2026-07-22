@@ -53,6 +53,7 @@ window.Schedule = (function () {
       const s = svc[p.service_id]; if (!s) return;
       const key = String(p.end_date).slice(0, 10);
       (map[key] = map[key] || []).push({
+        pid: p.id, service_id: p.service_id, company_id: s.company_id,
         company: coName[s.company_id] || '?', service: s.name, stage: p.name, status: p.status
       });
     });
