@@ -94,10 +94,12 @@ body.readonly .stage-card:hover { transform: none; box-shadow: none; }
 .pick-row:hover { border-color: var(--orange); background: var(--orange-soft); }
 .pick-row.added { opacity: .55; cursor: default; background: var(--surface-2); }
 .pick-row.added:hover { border-color: var(--line-strong); background: var(--surface-2); }
+.pick-row.dup-ok { background: var(--surface); }
+.pick-row.dup-ok:hover { border-color: var(--orange); background: var(--orange-soft); }
 .pick-row input { width: 17px; height: 17px; accent-color: var(--orange); }
 .pick-name { flex: 1; font-weight: 600; font-size: 14.5px; }
 .pick-amt { font-size: 13px; color: var(--ink-45); font-weight: 600; }
-.pick-tag { font-size: 11px; font-weight: 600; color: var(--st-done); background: var(--st-done-bg); padding: 2px 8px; border-radius: 6px; }
+.pick-tag { font-size: 11px; font-weight: 600; color: var(--orange-deep); background: var(--orange-soft); padding: 2px 8px; border-radius: 6px; }
 
 @media (max-width: 720px) {
   .d-info { grid-template-columns: repeat(2, 1fr); }

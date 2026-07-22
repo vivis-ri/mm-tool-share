@@ -61,23 +61,133 @@ window.PDF = (function () {
       .bd-stage-name{ font-size:11.5px; font-weight:700; color:#2A2B29; padding-right:14px; }
       .bd-stage-st{ font-size:10px; font-weight:700; margin-top:2px; }
       .bd-stage-date{ font-size:9.5px; color:#8b8c84; margin-top:3px; }
+      .bd-stage-asg{ font-size:9.5px; color:#6f7069; margin-top:3px; font-weight:600; }
       .bd-stage.st-plan{ border-left-color:#c3c9cf; } .bd-stage.st-plan .bd-stage-st{color:#6b7076;}
       .bd-stage.st-run{ border-left-color:#FA8619; background:#fffaf3; } .bd-stage.st-run .bd-stage-st{color:#E06E00;}
       .bd-stage.st-pause{ border-left-color:#8ea3b8; } .bd-stage.st-pause .bd-stage-st{color:#607086;}
       .bd-stage.st-done{ border-left-color:#2fbd7a; background:#f6fbf8; } .bd-stage.st-done .bd-stage-st{color:#1f9d63;}
       .bd-stage.st-late{ border-left-color:#e5484d; background:#fdf6f6; } .bd-stage.st-late .bd-stage-st{color:#d23a3f;}
       .bd-empty{ font-size:11px; color:#b0aca0; padding:4px 2px; }
+
+      /* 월간 달력 PDF */
+      .cal-legend{ display:flex; align-items:center; flex-wrap:wrap; gap:6px 9px; margin:0 0 11px; }
+      .cal-leg{ display:inline-flex; align-items:center; gap:5px; padding:3px 7px; border:1px solid #e0dccf; border-radius:8px; background:#fff; font-size:10px; font-weight:700; }
+      .cal-dot{ width:7px; height:7px; border-radius:50%; display:inline-block; flex:none; }
+      .cal-grid{ display:grid; grid-template-columns:repeat(7, 1fr); gap:5px; }
+      .cal-grid.weeks-1 .cal-cell{ min-height:118px; }
+      .cal-grid.weeks-2 .cal-cell{ min-height:102px; }
+      .cal-grid.weeks-4 .cal-cell{ min-height:82px; }
+      .cal-grid.weeks-6 .cal-cell{ min-height:66px; }
+      .cal-grid.weeks-8 .cal-cell{ min-height:56px; }
+      .cal-dow{ text-align:center; background:#faf5ec; border:1px solid #e0dccf; border-radius:6px; padding:5px 4px; font-size:10.5px; font-weight:800; }
+      .cal-dow.sun{ color:#e5484d; } .cal-dow.sat{ color:#476f96; }
+      .cal-cell{ min-height:76px; border:1px solid #e0dccf; border-radius:8px; padding:5px; background:#fff; break-inside:avoid; page-break-inside:avoid; }
+      .cal-cell.empty{ background:#fbfaf7; border-color:#f0eadf; color:#b0aca0; }
+      .cal-cell-top{ display:flex; align-items:center; justify-content:space-between; gap:4px; margin-bottom:4px; font-size:10.5px; font-weight:800; }
+      .cal-holiday{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#e5484d; font-size:8.5px; font-weight:700; }
+      .cal-items{ display:flex; flex-direction:column; gap:3px; }
+      .cal-item{ border:1px solid #e0dccf; border-radius:7px; padding:4px 5px; font-size:8.8px; line-height:1.28; overflow:hidden; }
+      .cal-item-title{ display:flex; align-items:center; gap:4px; font-weight:800; color:#2A2B29; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+      .cal-status{ width:6px; height:6px; border-radius:50%; display:inline-block; flex:none; }
+      .cal-item-meta{ margin-top:2px; color:#6f7069; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     </style>`;
 
   function stClass(s) { return ({ '예정': 'plan', '진행중': 'run', '일시정지': 'pause', '종료': 'done', '지연': 'late' })[s] || 'plan'; }
   function stTag(s) { return `<span class="st ${stClass(s)}">${esc(s || '예정')}</span>`; }
+  function statusColor(s) {
+    return ({ '예정': '#9AA0A6', '진행중': '#FA8619', '일시정지': '#607086', '종료': '#1f9d63', '지연': '#e5484d' })[s] || '#9AA0A6';
+  }
   function today() { const d = new Date(); return `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}`; }
+  function ymd(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+  function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+  function parseYmd(value) {
+    const s = String(value || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+    const d = new Date(s + 'T00:00:00');
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  function startOfWeek(d) {
+    const x = new Date(d);
+    x.setHours(0, 0, 0, 0);
+    x.setDate(x.getDate() - x.getDay());
+    return x;
+  }
   function isHiddenCompany(c) {
     return c && (c.hidden === true || c.hidden === 'true' || c.is_hidden === true || !!c.hidden_at);
   }
   function sortByQuoteDate(a, b) {
     if (window.Companies && window.Companies.sortByQuoteDate) return window.Companies.sortByQuoteDate(a, b);
     return String(a.first_quote_date || '9999-99-99').localeCompare(String(b.first_quote_date || '9999-99-99'));
+  }
+  function scheduleText(p) {
+    const start = p && p.start_date ? fmtDate(p.start_date) : '';
+    const end = p && p.end_date ? fmtDate(p.end_date) : '';
+    if (start && end && start !== end) return `${start} ~ ${end}`;
+    if (end) return end;
+    if (start) return start;
+    return '-';
+  }
+  function assigneeText(p) {
+    return (p && p.assignee) ? p.assignee : '-';
+  }
+  function monthAnchor(anchor) {
+    const base = anchor ? new Date(anchor) : (window.Schedule ? window.Schedule.startToday() : new Date());
+    if (Number.isNaN(base.getTime())) return new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    return new Date(base.getFullYear(), base.getMonth(), 1);
+  }
+  function monthLabel(anchor) {
+    const d = monthAnchor(anchor);
+    return `${d.getFullYear()}년 ${d.getMonth() + 1}월`;
+  }
+  function monthFileSuffix(anchor) {
+    const d = monthAnchor(anchor);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }
+  function monthCells(anchor) {
+    const first = monthAnchor(anchor);
+    const start = new Date(first);
+    start.setDate(first.getDate() - first.getDay());
+    return Array.from({ length: 42 }, (_, i) => {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      return d;
+    });
+  }
+  function fullDate(d) {
+    return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+  }
+  function calendarRange(opts) {
+    const weeks = Math.max(1, Math.min(12, Number(opts && opts.weeks) || 0));
+    const start = parseYmd(opts && opts.startDate);
+    if (start && weeks) {
+      const rangeStart = startOfWeek(start);
+      const rangeEnd = addDays(rangeStart, weeks * 7);
+      const rangeLast = addDays(rangeEnd, -1);
+      return {
+        mode: 'weeks',
+        start: rangeStart,
+        end: rangeEnd,
+        days: weeks * 7,
+        weeks,
+        label: `${fullDate(rangeStart)} ~ ${fullDate(rangeLast)} · ${weeks}주`,
+        suffix: `${ymd(rangeStart)}_${ymd(rangeLast)}`
+      };
+    }
+    const anchor = monthAnchor(opts && opts.anchor);
+    const cells = monthCells(anchor);
+    return {
+      mode: 'month',
+      start: cells[0],
+      end: addDays(cells[cells.length - 1], 1),
+      days: cells.length,
+      weeks: Math.ceil(cells.length / 7),
+      month: anchor.getMonth(),
+      label: monthLabel(anchor),
+      suffix: monthFileSuffix(anchor)
+    };
+  }
+  function filePart(s) {
+    return String(s || '').replace(/[\\/:*?"<>|]/g, '_').trim() || '업체';
   }
 
   function output(title, inner, filename, opts) {
@@ -157,13 +267,17 @@ window.PDF = (function () {
       const pr = progressOf(svcs, procBySvc);
       const svcBlocks = svcs.length ? svcs.map(s => {
         const ps = procBySvc[s.id] || [];
-        const stages = ps.length ? ps.map((p, i) => `
-          <div class="bd-stage st-${stClass(p.status)}">
-            <div class="bd-stage-idx">${i + 1}</div>
-            <div class="bd-stage-name">${esc(p.name)}</div>
-            <div class="bd-stage-st">${esc(p.status || '예정')}</div>
-            ${p.end_date ? `<div class="bd-stage-date">🚩 ${fmtDate(p.end_date)}</div>` : ''}
-          </div>`).join('') : '<div class="bd-empty">프로세스 단계 없음</div>';
+        const stages = ps.length ? ps.map((p, i) => {
+          const sched = scheduleText(p);
+          return `
+            <div class="bd-stage st-${stClass(p.status)}">
+              <div class="bd-stage-idx">${i + 1}</div>
+              <div class="bd-stage-name">${esc(p.name)}</div>
+              <div class="bd-stage-st">${esc(p.status || '예정')}</div>
+              <div class="bd-stage-asg">담당 ${esc(assigneeText(p))}</div>
+              <div class="bd-stage-date">일정 ${esc(sched)}</div>
+            </div>`;
+        }).join('') : '<div class="bd-empty">프로세스 단계 없음</div>';
         return `<div class="bd-svc">
           <div class="bd-svc-head"><span class="bd-svc-name">${esc(s.name)}</span>${stTag(s.status)}<span class="bd-svc-amt">${esc(UI.moneyVatText(s.amount))}</span></div>
           <div class="bd-stages">${stages}</div>
@@ -200,13 +314,91 @@ window.PDF = (function () {
       const ps = await DB.list('processes', { service_id: s.id });
       inner += `<h2>${esc(s.name)} · ${esc(UI.moneyVatText(s.amount))} · ${stTag(s.status)}</h2>
         <table><thead><tr><th>단계</th><th>담당</th><th>일정</th><th>상태</th><th>메모</th></tr></thead><tbody>
-        ${ps.length ? ps.map(p => `<tr><td>${esc(p.name)}</td><td>${esc(p.assignee || '-')}</td>
-          <td>${p.start_date ? fmtDate(p.start_date) + (p.end_date && p.end_date !== p.start_date ? ' ~ ' + fmtDate(p.end_date) : '') : '-'}</td>
+        ${ps.length ? ps.map(p => `<tr><td>${esc(p.name)}</td><td>${esc(assigneeText(p))}</td>
+          <td>${esc(scheduleText(p))}</td>
           <td>${stTag(p.status)}</td><td>${esc(p.memo || '')}</td></tr>`).join('')
           : '<tr><td colspan="5">프로세스 없음</td></tr>'}
         </tbody></table>`;
     }
     output(c.name, inner, c.name + '_진행현황');
+  }
+
+  async function calendar(companyId, opts) {
+    if (companyId && typeof companyId === 'object') {
+      opts = companyId;
+      companyId = opts.companyId;
+    }
+    const { companies: cos, svcBy, procBySvc } = await loadAll();
+    const targetId = companyId == null ? '' : String(companyId);
+    const selected = targetId ? cos.filter(c => String(c.id) === targetId) : cos;
+    if (targetId && !selected.length) {
+      UI.toast('업체를 찾지 못했습니다');
+      return;
+    }
+
+    const range = calendarRange(opts);
+    const byDate = {};
+    selected.forEach(c => {
+      (svcBy[c.id] || []).forEach(s => {
+        (procBySvc[s.id] || []).forEach(p => {
+          const key = String(p.end_date || '').slice(0, 10);
+          const d = parseYmd(key);
+          if (!d || d < range.start || d >= range.end) return;
+          (byDate[key] = byDate[key] || []).push({ company: c, service: s, process: p });
+        });
+      });
+    });
+    Object.keys(byDate).forEach(key => {
+      byDate[key].sort((a, b) =>
+        String(a.company.name || '').localeCompare(String(b.company.name || ''), 'ko-KR') ||
+        String(a.service.name || '').localeCompare(String(b.service.name || ''), 'ko-KR') ||
+        String(a.process.name || '').localeCompare(String(b.process.name || ''), 'ko-KR'));
+    });
+
+    const isSingle = !!targetId && selected.length === 1;
+    const subject = isSingle ? selected[0].name : '전체 업체';
+    const total = Object.keys(byDate).reduce((sum, key) => sum + byDate[key].length, 0);
+    const legend = selected.length
+      ? selected.map(c => {
+        const tone = UI.companyTone ? UI.companyTone(c.id) : { dot: '#FA8619' };
+        return `<span class="cal-leg"><span class="cal-dot" style="background:${tone.dot}"></span>${esc(c.name)}</span>`;
+      }).join('')
+      : '<span class="muted">표시할 업체가 없습니다.</span>';
+    const dows = ['일', '월', '화', '수', '목', '금', '토']
+      .map((d, i) => `<div class="cal-dow ${i === 0 ? 'sun' : (i === 6 ? 'sat' : '')}">${d}</div>`).join('');
+    const cells = Array.from({ length: range.days }, (_, i) => addDays(range.start, i)).map(d => {
+      const key = ymd(d);
+      const items = byDate[key] || [];
+      const holiday = window.Schedule && window.Schedule.holidayName ? window.Schedule.holidayName(d) : '';
+      const outMonth = range.mode === 'month' && d.getMonth() !== range.month;
+      const dateText = range.mode === 'weeks' ? `${d.getMonth() + 1}.${d.getDate()}` : d.getDate();
+      return `<div class="cal-cell ${outMonth ? 'empty' : ''}">
+        <div class="cal-cell-top"><span>${dateText}</span>${holiday ? `<span class="cal-holiday">${esc(holiday)}</span>` : ''}</div>
+        <div class="cal-items">
+          ${items.map(it => {
+            const tone = UI.companyTone ? UI.companyTone(it.company.id) : { bg: '#fff4e6', line: '#f2b66c', dot: '#FA8619' };
+            const status = it.process.status || '예정';
+            const title = isSingle
+              ? `${it.service.name || '-'} · ${it.process.name || '-'}`
+              : `${it.company.name || '-'} · ${it.service.name || '-'}`;
+            const meta = isSingle
+              ? `${status} · 담당 ${assigneeText(it.process)}`
+              : `${it.process.name || '-'} · ${status} · 담당 ${assigneeText(it.process)}`;
+            return `<div class="cal-item" style="background:${tone.bg};border-color:${tone.line}">
+              <div class="cal-item-title"><span class="cal-status" style="background:${statusColor(status)}"></span>${esc(title)}</div>
+              <div class="cal-item-meta">${esc(meta)}</div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    }).join('');
+
+    output(`${subject} 달력`,
+      `<h1>${esc(subject)} 달력</h1>
+       <div class="sub">${esc(range.label)} 마감일 기준 · ${selected.length}개 업체 · ${total}건</div>
+       <div class="cal-legend">${legend}</div>
+       <div class="cal-grid weeks-${range.weeks}">${dows}${cells}</div>`,
+      `${filePart(subject)}_달력_${range.suffix}`, { landscape: true });
   }
 
   async function diary(dates) {
@@ -215,7 +407,6 @@ window.PDF = (function () {
     const S = window.Schedule;
     const movedPrefix = 'mm-moved-to:';
     const isMoved = (ch) => String((ch && ch.memo) || '').startsWith(movedPrefix);
-    function ymd(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
     const DOW = ['일', '월', '화', '수', '목', '금', '토'];
     const cmap = {}; checks.forEach(ch => { if (ch.routine_id) cmap[ch.routine_id + '_' + ch.date] = ch; });
     let cols = dates.map(d => {
@@ -236,5 +427,5 @@ window.PDF = (function () {
       '업무일지');
   }
 
-  return { companies, progressBoard, company, diary };
+  return { companies, progressBoard, company, calendar, diary };
 })();

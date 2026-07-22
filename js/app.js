@@ -74,7 +74,7 @@
 
     navCoList.innerHTML = cos.length
       ? cos.map(c => `<button class="nav-co-item ${c._current ? 'fav' : ''}" data-id="${c.id}" title="${c._current ? '현재 진행 업체' : ''}">
-          <span class="co-dot ${UI.statusClass(c.status)}"></span>
+          <span class="co-dot" style="${UI.companyDotStyle(c.id)}"></span>
           <span class="nav-co-name">${UI.esc(c.name)}</span>
           ${c._current ? '<span class="nav-co-star">★</span>' : ''}</button>`).join('')
       : '<div class="nav-co-empty">등록된 업체 없음</div>';

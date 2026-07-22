@@ -185,3 +185,35 @@
 .share-meta { font-size:11px; color:var(--ink-45); margin-top:6px; }
 .share-note { margin-top:14px; padding:11px 13px; background:var(--surface-2); border:1px solid var(--line); border-radius:9px; font-size:12px; color:var(--ink-70); line-height:1.65; }
 .share-note code { background:#efe9dc; padding:1px 6px; border-radius:5px; font-size:11.5px; }
+
+/* ── 업체별 달력 PDF 선택 ── */
+.cal-pdf-lead { margin: 0 0 12px; color: var(--ink-70); font-size: 13px; line-height: 1.6; }
+.cal-range-box { margin-bottom: 14px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); }
+.cal-range-grid { display: grid; grid-template-columns: minmax(0, 1fr) 120px; gap: 10px; }
+.cal-range-grid .field { margin: 0; }
+.cal-week-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.cal-week-presets button {
+  padding: 5px 9px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink-70);
+  font-size: 12px; font-weight: 700; transition: background .12s, border-color .12s, color .12s;
+}
+.cal-week-presets button:hover { border-color: var(--orange); color: var(--orange-deep); background: var(--orange-soft); }
+.cal-range-preview {
+  margin-top: 10px; padding: 8px 10px; border-radius: 8px;
+  background: var(--surface); border: 1px solid var(--line);
+  color: var(--ink); font-size: 12.5px; font-weight: 800;
+}
+.cal-pdf-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
+.cal-pdf-row {
+  display: grid; grid-template-columns: 10px minmax(0, .78fr) minmax(0, 1fr); align-items: center; gap: 9px;
+  padding: 11px 12px; border-radius: 9px; border: 1px solid var(--line);
+  background: var(--surface); text-align: left; transition: background .12s, border-color .12s, box-shadow .12s;
+}
+.cal-pdf-row:hover { background: var(--surface-2); border-color: var(--line-strong); box-shadow: var(--shadow-sm); }
+.cal-pdf-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--co-dot, var(--orange));
+  box-shadow: 0 0 0 3px var(--co-dot-soft, var(--orange-soft));
+}
+.cal-pdf-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; font-weight: 800; color: var(--ink); }
+.cal-pdf-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 600; color: var(--ink-45); }
+.cal-pdf-empty { grid-column: 1 / -1; padding: 18px; border: 1px dashed var(--line-strong); border-radius: 10px; color: var(--ink-45); text-align: center; }

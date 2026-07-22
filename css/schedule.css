@@ -3,15 +3,24 @@
    ============================================================ */
 .date-nav.inline { margin: 0; gap: 6px; }
 
+#view-schedule {
+  max-width: 1280px;
+}
+
 .sp-layout {
   display: grid;
-  grid-template-columns: 1fr 280px;
-  gap: 16px;
+  grid-template-columns: minmax(640px, 1fr) minmax(300px, 320px);
+  gap: 18px;
   align-items: start;
   margin-top: 12px;
 }
 
 /* ── 달력 ── */
+.sp-cal {
+  width: 100%;
+  min-width: 0;
+}
+
 .sp-cal .month-dow {
   display: grid; grid-template-columns: repeat(7, 1fr);
   font-size: 12px; font-weight: 700; color: var(--ink-45);
@@ -21,9 +30,15 @@
 .sp-cal .month-dow .sun { color: var(--st-late); }
 .sp-cal .month-dow .sat { color: var(--st-pause); }
 
-.sp-cells { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.sp-cells {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-auto-rows: minmax(116px, auto);
+  gap: 6px;
+}
 .sp-cell {
-  min-height: 104px;
+  min-width: 0;
+  min-height: 116px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -44,7 +59,14 @@
   border-radius: 8px; padding: 0 6px;
 }
 .mcell-hol { font-size: 10px; color: var(--st-late); font-weight: 600; }
-.sp-cell-items { display: flex; flex-direction: column; gap: 4px; overflow-y: auto; max-height: 150px; }
+.sp-cell-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+  min-height: 42px;
+  max-height: 150px;
+}
 
 /* 드롭 하이라이트 */
 .sp-cell.drop-target {
@@ -55,35 +77,54 @@
 
 /* ── 단계 칩 ── */
 .sp-chip {
-  display: flex; align-items: center; gap: 5px;
+  display: flex; flex-direction: column; align-items: stretch; gap: 2px;
   font-size: 11px; line-height: 1.25;
   padding: 4px 7px;
-  border: 1px solid var(--line);
-  border-left: 3px solid var(--st-plan);
+  border: 1px solid var(--sp-co-line, var(--line));
   border-radius: 7px;
-  background: var(--surface);
+  background: var(--sp-co-bg, var(--surface));
   color: var(--ink);
   user-select: none;
 }
 .sp-chip.draggable { cursor: grab; }
 .sp-chip.draggable:active { cursor: grabbing; }
 .sp-chip.dragging { opacity: .45; }
-.sp-chip .sp-chip-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--st-plan); flex: none; }
+.sp-chip-main {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.sp-chip .sp-chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--st-plan);
+  box-shadow: 0 0 0 2px rgba(255,255,255,.72);
+  flex: none;
+}
 .sp-chip .sp-chip-tx { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sp-chip.st-plan  { border-left-color: var(--st-plan);  }
+.sp-chip .sp-chip-sched {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1px 5px;
+  padding-left: 13px;
+  color: var(--ink-45);
+  font-size: 9.6px;
+  font-weight: 700;
+  line-height: 1.16;
+}
+.sp-chip .sp-chip-sched i { font-style: normal; white-space: nowrap; }
 .sp-chip.st-plan  .sp-chip-dot { background: var(--st-plan);  }
-.sp-chip.st-run   { border-left-color: var(--st-run);  background: #fffaf3; }
 .sp-chip.st-run   .sp-chip-dot { background: var(--st-run);  }
-.sp-chip.st-pause { border-left-color: var(--st-pause); }
 .sp-chip.st-pause .sp-chip-dot { background: var(--st-pause); }
-.sp-chip.st-done  { border-left-color: var(--st-done); background: #f6fbf8; }
 .sp-chip.st-done  .sp-chip-dot { background: var(--st-done); }
-.sp-chip.st-late  { border-left-color: var(--st-late); background: #fdf6f6; }
 .sp-chip.st-late  .sp-chip-dot { background: var(--st-late); }
 
 /* ── 미배정 풀 ── */
 .sp-pool {
   position: sticky; top: 8px;
+  min-width: 0;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -94,19 +135,221 @@
 }
 .sp-pool-head {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 14px 8px; font-weight: 800; font-size: 14px;
+  gap: 12px;
+  padding: 13px 14px 10px;
+  font-weight: 800; font-size: 14px;
+}
+.sp-pool-title { font-size: 14px; line-height: 1.25; }
+.sp-pool-sub {
+  margin-top: 2px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-45);
+  line-height: 1.25;
 }
 .sp-pool-n {
   font-size: 12px; font-weight: 700; color: #fff; background: var(--orange);
   border-radius: 10px; padding: 1px 9px;
+  flex: none;
 }
-.sp-pool-hint { padding: 0 14px 10px; font-size: 11px; color: var(--ink-45); }
-.sp-pool-body { padding: 0 12px 12px; overflow-y: auto; }
+.sp-company-tabs-wrap {
+  padding: 9px 12px 11px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--surface), var(--surface-2));
+}
+.sp-company-tabs-label {
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--ink-45);
+}
+.sp-company-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  max-height: 118px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 2px;
+}
+.sp-company-tabs::-webkit-scrollbar { width: 6px; }
+.sp-company-tab {
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--ink-70);
+  font-size: 11.5px;
+  font-weight: 700;
+  text-align: left;
+  transition: background .15s, border-color .15s, color .15s, transform .15s;
+}
+.sp-company-tab:hover {
+  border-color: var(--line-strong);
+  color: var(--ink);
+  transform: translateY(-1px);
+}
+.sp-company-tab:active { transform: translateY(0); }
+.sp-company-tab.on {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+.sp-company-tab .lg {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex: none;
+  background: var(--co-dot, #9AA0A6);
+  box-shadow: 0 0 0 2px var(--co-dot-soft, rgba(42,43,41,.06));
+}
+.sp-company-tab-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sp-company-tab-n {
+  flex: none;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 7px;
+  background: rgba(42,43,41,.08);
+  text-align: center;
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+.sp-company-tab.on .sp-company-tab-n {
+  background: rgba(255,255,255,.18);
+}
+.sp-pool-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-45);
+}
+.sp-tool-actions {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+.sp-tool-btn {
+  padding: 4px 7px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: var(--ink-70);
+  font-size: 11px;
+  font-weight: 700;
+  transition: background .15s, border-color .15s, transform .15s;
+}
+.sp-tool-btn:hover {
+  background: var(--surface);
+  border-color: var(--line-strong);
+}
+.sp-tool-btn:active { transform: translateY(1px); }
+.sp-pool-body {
+  padding: 0 12px 12px;
+  overflow-y: auto;
+}
 .sp-pg { margin-bottom: 12px; }
-.sp-pg-co { font-size: 12.5px; font-weight: 800; color: var(--ink); margin: 4px 2px 6px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
-.sp-pg-svc { margin: 0 0 8px; }
-.sp-pg-svc-h { display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: var(--ink-70); margin-bottom: 4px; }
-.sp-pg-items { display: flex; flex-direction: column; gap: 4px; }
+.sp-pg-co {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--ink);
+  margin: 4px 2px 7px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--line);
+}
+.sp-pg-count {
+  min-width: 22px;
+  padding: 1px 7px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--ink-45);
+  font-size: 10.5px;
+  text-align: center;
+}
+.sp-pg-svc {
+  margin: 0 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.sp-pg-svc-h {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ink-70);
+  text-align: left;
+  transition: background .15s;
+}
+.sp-pg-svc-h:hover { background: rgba(255,255,255,.66); }
+.sp-svc-title {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sp-svc-title .badge { font-size: 10.5px; padding: 2px 7px; }
+.sp-svc-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sp-svc-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+}
+.sp-svc-meta {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--ink-45);
+  font-size: 10.5px;
+  text-align: center;
+}
+.sp-svc-caret {
+  color: var(--ink-45);
+  font-size: 10px;
+  line-height: 1;
+  transition: transform .15s;
+}
+.sp-pg-svc.collapsed .sp-svc-caret { transform: rotate(-90deg); }
+.sp-pg-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 8px 8px;
+}
+.sp-pg-svc.collapsed .sp-pg-items { display: none; }
 .sp-pool-empty { padding: 24px 12px; text-align: center; font-size: 12.5px; color: var(--ink-45); line-height: 1.7; }
 
 /* 필터 칩의 상태 점 */
@@ -118,7 +361,14 @@
 .sp-filter .chip .lg.late { background: var(--st-late); }
 
 /* 반응형 — 좁으면 풀을 아래로 */
-@media (max-width: 900px) {
+@media (max-width: 1180px) {
   .sp-layout { grid-template-columns: 1fr; }
   .sp-pool { position: static; max-height: none; }
+}
+
+@media (max-width: 760px) {
+  #view-schedule { padding-left: 16px; padding-right: 16px; }
+  .sp-cells { grid-auto-rows: minmax(96px, auto); gap: 4px; }
+  .sp-cell { min-height: 96px; padding: 5px; border-radius: 8px; }
+  .sp-cell-items { min-height: 30px; }
 }

@@ -28,10 +28,34 @@ window.UI = (function () {
     '스토어': '스마트스토어 구축',
     '인스타그램운영': '인스타그램 운영'
   };
+  const COMPANY_TONES = [
+    { bg: '#fff4e6', line: '#f2b66c', dot: '#fa8619' },
+    { bg: '#eef6ff', line: '#9fc7ea', dot: '#4f9bd7' },
+    { bg: '#edf7ef', line: '#9bcda8', dot: '#3e9a57' },
+    { bg: '#fff0f3', line: '#e7a3b1', dot: '#d95b76' },
+    { bg: '#f2f0ff', line: '#bab1e8', dot: '#7465c8' },
+    { bg: '#eff7f7', line: '#91c9c8', dot: '#2f9694' },
+    { bg: '#fff8d7', line: '#e3c55d', dot: '#c79a12' },
+    { bg: '#f0f3f6', line: '#aeb8c2', dot: '#6f7f8d' }
+  ];
 
   function statusClass(s) { return STATUS_CLASS[s] || 'plan'; }
   function badge(status) {
     return `<span class="badge ${statusClass(status)}">${esc(status || '예정')}</span>`;
+  }
+  function companyTone(id) {
+    const text = String(id || '');
+    let n = 0;
+    for (let i = 0; i < text.length; i++) n = ((n << 5) - n + text.charCodeAt(i)) | 0;
+    return COMPANY_TONES[Math.abs(n) % COMPANY_TONES.length];
+  }
+  function companyStyle(id) {
+    const tone = companyTone(id);
+    return `--sp-co-bg:${tone.bg};--sp-co-line:${tone.line};--sp-co-dot:${tone.dot};`;
+  }
+  function companyDotStyle(id) {
+    const tone = companyTone(id);
+    return `--co-dot:${tone.dot};--co-dot-soft:${tone.bg};--co-dot-line:${tone.line};`;
   }
 
   function serviceKey(name) {
@@ -227,7 +251,8 @@ window.UI = (function () {
 
   return {
     STATUSES, STATUS_CLASS, SERVICE_ORDER, MANUAL_SERVICE_ORDER_BASE,
-    statusClass, badge, esc, money, moneyShort, fmtDate, statusOptions, toast, modal, confirm: confirmModal, statusPicker,
+    statusClass, badge, companyTone, companyStyle, companyDotStyle,
+    esc, money, moneyShort, fmtDate, statusOptions, toast, modal, confirm: confirmModal, statusPicker,
     vatParts, moneyVatText, moneyVatHTML,
     serviceKey, defaultServiceOrder, hasManualServiceOrder, sortServiceTemplates, serviceSorter
   };

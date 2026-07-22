@@ -1,19 +1,53 @@
 // ============================================================
 //  schedule-plan.js — 프로젝트 일정 조율(월간)
 //  · 진행 중인 업체의 "마감일 미정" 프로세스 단계를 달력에 드래그&드롭 → end_date 설정
-//  · 배치 즉시 업체현황 / 업무일지 🚩 / PDF 진행보드에 자동 반영(모두 end_date 참조)
+//  · 배치된 마감일 카드를 다른 날짜로 드래그 → 시작일~마감일 기간 설정
+//  · 배치 즉시 업체현황 / 업무일지 🚩 / PDF 진행보드에 자동 반영
 //  · 개인 체크리스트(업무일지)와 분리 — 여기선 프로세스 단계만 다룸
 // ============================================================
 window.SchedulePlan = (function () {
   const { esc, toast } = UI;
   const S = window.Schedule;
   const DOW = S.DOW;
-  const state = { anchor: S.startToday(), companyFilter: null };
-  let dragging = null; // { id, fromDate|null }
+  const state = { anchor: S.startToday(), companyFilter: null, collapsedSvcs: {} };
+  let dragging = null; // { id, fromDate|null, startDate, endDate }
 
   function isHidden(c) { return window.Companies && window.Companies.isHidden(c); }
   function isActiveCompany(c) { return window.Companies && window.Companies.isActiveStatus(c.status); }
   function stClass(s) { return UI.statusClass(s); }
+  function dateValue(v) {
+    const s = String(v || '').slice(0, 10);
+    return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : '';
+  }
+  function chipScheduleText(p, place) {
+    const start = dateValue(p.start_date);
+    const end = dateValue(p.end_date);
+    if (start && end && start !== end) return `시작 ${UI.fmtDate(start)} · 마감 ${UI.fmtDate(end)}`;
+    if (place === 'pool' && start) return `시작 ${UI.fmtDate(start)}`;
+    if (place === 'cal' && start && !end) return `시작 ${UI.fmtDate(start)}`;
+    return '';
+  }
+  function rangePatch(drag, targetDate) {
+    if (!drag.fromDate) return { end_date: targetDate };
+    const from = dateValue(drag.fromDate);
+    const start = dateValue(drag.startDate) || from;
+    const end = dateValue(drag.endDate) || from;
+    if (!start || !end) return { end_date: targetDate };
+    if (!drag.startDate || start === end) {
+      return targetDate < from
+        ? { start_date: targetDate, end_date: from }
+        : { start_date: from, end_date: targetDate };
+    }
+    if (targetDate < start) return { start_date: targetDate, end_date: end };
+    if (targetDate > end) return { start_date: start, end_date: targetDate };
+    return { start_date: start, end_date: targetDate };
+  }
+  function rangeToast(patch) {
+    if (patch.start_date && patch.end_date && patch.start_date !== patch.end_date) {
+      return `기간을 ${patch.start_date} ~ ${patch.end_date}로 설정했습니다`;
+    }
+    return `마감일을 ${patch.end_date}로 설정했습니다`;
+  }
 
   async function loadData() {
     const companiesAll = (await DB.list('companies')).filter(c => !isHidden(c));
@@ -21,7 +55,15 @@ window.SchedulePlan = (function () {
       .filter(isActiveCompany)
       .sort(window.Companies ? window.Companies.sortByQuoteDate : undefined);
     const coIds = new Set(companies.map(c => String(c.id)));
-    const coName = {}; companies.forEach(c => { coName[c.id] = c.name; });
+    if (state.companyFilter && !coIds.has(String(state.companyFilter))) state.companyFilter = null;
+
+    const coName = {};
+    const coMeta = {};
+    companies.forEach(c => {
+      const id = String(c.id);
+      coName[id] = c.name;
+      coMeta[id] = { ...c, _poolCount: 0 };
+    });
 
     const serviceTemplates = await DB.list('service_templates');
     const services = (await DB.list('services'))
@@ -39,10 +81,13 @@ window.SchedulePlan = (function () {
     processes.forEach(p => {
       if (p.end_date || p.status === '종료') return;
       const s = svcById[p.service_id];
+      const coId = String(s.company_id);
+      if (coMeta[coId]) coMeta[coId]._poolCount += 1;
       if (!inFilter(s.company_id)) return;
-      const rec = { ...p, _companyId: s.company_id, _company: coName[s.company_id], _service: s.name };
-      (byCo[s.company_id] = byCo[s.company_id] || { name: coName[s.company_id], svcs: {} });
-      (byCo[s.company_id].svcs[s.id] = byCo[s.company_id].svcs[s.id] || { name: s.name, status: s.status, items: [] }).items.push(rec);
+      const rec = { ...p, _companyId: s.company_id, _company: coName[coId], _service: s.name };
+      const coGroup = (byCo[coId] = byCo[coId] || { id: s.company_id, name: coName[coId], status: coMeta[coId] && coMeta[coId].status, count: 0, svcs: {} });
+      coGroup.count += 1;
+      (coGroup.svcs[s.id] = coGroup.svcs[s.id] || { id: s.id, name: s.name, status: s.status, items: [] }).items.push(rec);
     });
 
     // 날짜별 배치된 단계
@@ -53,15 +98,16 @@ window.SchedulePlan = (function () {
       if (!inFilter(s.company_id)) return;
       const key = String(p.end_date).slice(0, 10);
       (scheduledByDate[key] = scheduledByDate[key] || []).push({
-        ...p, _company: coName[s.company_id], _service: s.name
+        ...p, _companyId: s.company_id, _company: coName[String(s.company_id)], _service: s.name
       });
     });
 
     // 미배정 개수
     let poolCount = 0;
     Object.values(byCo).forEach(co => Object.values(co.svcs).forEach(sv => { poolCount += sv.items.length; }));
+    const totalPoolCount = Object.values(coMeta).reduce((sum, c) => sum + c._poolCount, 0);
 
-    return { companies, byCo, scheduledByDate, poolCount };
+    return { companies: companies.map(c => coMeta[String(c.id)]), byCo, scheduledByDate, poolCount, totalPoolCount };
   }
 
   async function render(root) {
@@ -85,13 +131,6 @@ window.SchedulePlan = (function () {
         </div>
       </div>
 
-      ${data.companies.length ? `
-      <div class="filter-chips sp-filter">
-        <button class="chip ${!state.companyFilter ? 'on' : ''}" data-co="">전체 진행업체<span class="chip-n">${data.companies.length}</span></button>
-        ${data.companies.map(c => `<button class="chip ${String(state.companyFilter) === String(c.id) ? 'on' : ''}" data-co="${c.id}">
-          <i class="lg ${stClass(c.status)}"></i>${esc(c.name)}</button>`).join('')}
-      </div>` : ''}
-
       <div class="sp-layout">
         <div class="sp-cal" id="sp-cal"></div>
         <aside class="sp-pool" id="sp-pool"></aside>
@@ -104,10 +143,16 @@ window.SchedulePlan = (function () {
 
   function chipHTML(p, place) {
     // place: 'cal' | 'pool'
-    const label = place === 'cal' ? `${esc(p._company)} · ${esc(p.name)}` : `${esc(p.name)}`;
+    const label = `${esc(p._service || '항목')} · ${esc(p.name)}`;
+    const sched = chipScheduleText(p, place);
+    const titleDates = sched ? ` · ${sched}` : '';
+    const schedHTML = sched
+      ? `<span class="sp-chip-sched">${sched.split(' · ').map(x => `<i>${esc(x)}</i>`).join('')}</span>`
+      : '';
     return `<div class="sp-chip st-${stClass(p.status)} ${DB.READONLY ? '' : 'draggable'}"
-        draggable="${DB.READONLY ? 'false' : 'true'}" data-pid="${p.id}" data-place="${place}" title="${esc(p._company)} · ${esc(p._service)} · ${esc(p.name)} (${esc(p.status || '예정')})">
-        <span class="sp-chip-dot"></span><span class="sp-chip-tx">${label}</span></div>`;
+        draggable="${DB.READONLY ? 'false' : 'true'}" data-pid="${p.id}" data-place="${place}" data-start="${esc(dateValue(p.start_date))}" data-end="${esc(dateValue(p.end_date))}" style="${UI.companyStyle(p._companyId)}" title="${esc(p._company)} · ${esc(p._service)} · ${esc(p.name)} (${esc(p.status || '예정')})${esc(titleDates)}">
+        <span class="sp-chip-main"><span class="sp-chip-dot"></span><span class="sp-chip-tx">${label}</span></span>
+        ${schedHTML}</div>`;
   }
 
   function renderCalendar(host, data) {
@@ -138,23 +183,56 @@ window.SchedulePlan = (function () {
   }
 
   function renderPool(host, data) {
-    const groups = Object.entries(data.byCo);
+    const selected = data.companies.find(c => String(c.id) === String(state.companyFilter));
+    const groups = data.companies
+      .map(c => [String(c.id), data.byCo[String(c.id)]])
+      .filter(([cid, co]) => co && (!state.companyFilter || String(cid) === String(state.companyFilter)));
     host.innerHTML = `
       <div class="sp-pool-head">
-        <span>🗂 마감일 미정</span><span class="sp-pool-n">${data.poolCount}</span>
+        <div>
+          <div class="sp-pool-title">마감일 미정</div>
+          <div class="sp-pool-sub">${esc(selected ? selected.name : '전체 진행업체')}</div>
+        </div>
+        <span class="sp-pool-n">${data.poolCount}</span>
       </div>
-      <div class="sp-pool-hint">${DB.READONLY ? '읽기전용' : '단계를 달력 날짜로 끌어다 놓으세요'}</div>
+      ${data.companies.length ? `
+        <div class="sp-company-tabs-wrap">
+          <div class="sp-company-tabs-label">업체별 보기</div>
+          <div class="sp-company-tabs" role="tablist" aria-label="업체별 미정 단계">
+            <button class="sp-company-tab ${!state.companyFilter ? 'on' : ''}" type="button" data-co="">
+              <span class="sp-company-tab-name">전체</span><span class="sp-company-tab-n">${data.totalPoolCount}</span>
+            </button>
+            ${data.companies.map(c => `<button class="sp-company-tab ${String(state.companyFilter) === String(c.id) ? 'on' : ''}" type="button" data-co="${esc(c.id)}" title="${esc(c.name)}">
+              <i class="lg" style="${UI.companyDotStyle(c.id)}"></i><span class="sp-company-tab-name">${esc(c.name)}</span><span class="sp-company-tab-n">${c._poolCount}</span>
+            </button>`).join('')}
+          </div>
+        </div>` : ''}
+      <div class="sp-pool-tools">
+        <span>${DB.READONLY ? '읽기전용' : '날짜로 드래그'}</span>
+        <div class="sp-tool-actions">
+          <button class="sp-tool-btn" id="sp-expand-all" type="button">펼침</button>
+          <button class="sp-tool-btn" id="sp-collapse-all" type="button">접기</button>
+        </div>
+      </div>
       <div class="sp-pool-body" id="sp-pool-body">
         ${groups.length ? groups.map(([cid, co]) => `
           <div class="sp-pg">
-            <div class="sp-pg-co">${esc(co.name)}</div>
-            ${Object.values(co.svcs).map(sv => `
-              <div class="sp-pg-svc">
-                <div class="sp-pg-svc-h"><span class="badge ${stClass(sv.status)}">${esc(sv.status)}</span>${esc(sv.name)}</div>
+            <div class="sp-pg-co">
+              <span>${esc(co.name)}</span><span class="sp-pg-count">${co.count}</span>
+            </div>
+            ${Object.entries(co.svcs).map(([sid, sv]) => {
+              const collapsed = !!state.collapsedSvcs[String(sid)];
+              return `
+              <div class="sp-pg-svc ${collapsed ? 'collapsed' : ''}">
+                <button class="sp-pg-svc-h" type="button" data-svc-toggle data-svc="${esc(sid)}" aria-expanded="${collapsed ? 'false' : 'true'}">
+                  <span class="sp-svc-title"><span class="badge ${stClass(sv.status)}">${esc(sv.status)}</span><span class="sp-svc-name">${esc(sv.name)}</span></span>
+                  <span class="sp-svc-right"><span class="sp-svc-meta">${sv.items.length}</span><span class="sp-svc-caret">▾</span></span>
+                </button>
                 <div class="sp-pg-items">${sv.items.map(p => chipHTML(p, 'pool')).join('')}</div>
-              </div>`).join('')}
+              </div>`;
+            }).join('')}
           </div>`).join('')
-        : `<div class="sp-pool-empty">🎉 진행 중인 업체의 모든 단계에<br>마감일이 잡혀 있습니다.</div>`}
+        : `<div class="sp-pool-empty">진행 중인 업체의 모든 단계에<br>마감일이 잡혀 있습니다.</div>`}
       </div>`;
   }
 
@@ -163,63 +241,106 @@ window.SchedulePlan = (function () {
     root.querySelector('#sp-prev').addEventListener('click', () => { state.anchor = new Date(state.anchor.getFullYear(), state.anchor.getMonth() - 1, 1); render(root); });
     root.querySelector('#sp-next').addEventListener('click', () => { state.anchor = new Date(state.anchor.getFullYear(), state.anchor.getMonth() + 1, 1); render(root); });
     root.querySelector('#sp-today').addEventListener('click', () => { state.anchor = S.startToday(); render(root); });
-    root.querySelectorAll('.sp-filter .chip').forEach(b => b.addEventListener('click', () => {
+    root.querySelectorAll('.sp-company-tab').forEach(b => b.addEventListener('click', () => {
       state.companyFilter = b.dataset.co || null; render(root);
     }));
+    root.querySelectorAll('[data-svc-toggle]').forEach(b => b.addEventListener('click', () => {
+      const key = String(b.dataset.svc);
+      state.collapsedSvcs[key] = !state.collapsedSvcs[key];
+      render(root);
+    }));
+    const expandAll = root.querySelector('#sp-expand-all');
+    if (expandAll) expandAll.addEventListener('click', () => {
+      root.querySelectorAll('[data-svc-toggle]').forEach(b => { delete state.collapsedSvcs[String(b.dataset.svc)]; });
+      render(root);
+    });
+    const collapseAll = root.querySelector('#sp-collapse-all');
+    if (collapseAll) collapseAll.addEventListener('click', () => {
+      root.querySelectorAll('[data-svc-toggle]').forEach(b => { state.collapsedSvcs[String(b.dataset.svc)] = true; });
+      render(root);
+    });
 
     if (DB.READONLY) return;
     bindDnD(root);
   }
 
   function bindDnD(root) {
+    let dropTarget = null;   // { kind:'date', date } | { kind:'pool' }
+    let committing = false;
+
+    function clearHighlights() {
+      root.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
+    }
+
+    // drop 또는 dragend 어느 쪽이 먼저 오든 한 번만 확정(HTML5 drop 미발화 환경 대비)
+    async function commit() {
+      const drag = dragging, dt = dropTarget;
+      dragging = null; dropTarget = null;
+      clearHighlights();
+      if (committing || !drag || !dt) return;
+      committing = true;
+      try {
+        if (dt.kind === 'date' && drag.fromDate !== dt.date) {
+          const patch = rangePatch(drag, dt.date);
+          await DB.update('processes', drag.id, patch);
+          toast(rangeToast(patch));
+          await render(root);
+        } else if (dt.kind === 'pool' && drag.fromDate) {
+          await DB.update('processes', drag.id, { end_date: '' });
+          toast('마감일을 해제했습니다 (미정)');
+          await render(root);
+        }
+      } finally { committing = false; }
+    }
+
     root.querySelectorAll('.sp-chip.draggable').forEach(chip => {
       chip.addEventListener('dragstart', (e) => {
         const cell = chip.closest('.sp-cell');
-        dragging = { id: chip.dataset.pid, fromDate: cell ? cell.dataset.date : null };
+        dragging = {
+          id: chip.dataset.pid,
+          fromDate: cell ? cell.dataset.date : null,
+          startDate: chip.dataset.start || '',
+          endDate: chip.dataset.end || ''
+        };
+        dropTarget = null;
         chip.classList.add('dragging');
-        if (e.dataTransfer) { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', chip.dataset.pid); }
+        if (e.dataTransfer) { e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', chip.dataset.pid); } catch {} }
       });
-      chip.addEventListener('dragend', () => { chip.classList.remove('dragging'); setTimeout(() => { dragging = null; }, 0); });
+      // 확정은 dragend에서(항상 발화) — drop이 안 터져도 반영되도록
+      chip.addEventListener('dragend', () => { chip.classList.remove('dragging'); commit(); });
     });
 
     // 달력 날짜 칸 = 드롭 대상 → 마감일 설정/변경
     root.querySelectorAll('.sp-cell:not(.empty)').forEach(cell => {
-      cell.addEventListener('dragover', (e) => {
-        if (!dragging || dragging.fromDate === cell.dataset.date) return;
-        e.preventDefault(); cell.classList.add('drop-target');
-        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+      const date = cell.dataset.date;
+      const canDrop = () => dragging && dragging.fromDate !== date;
+      const mark = (e) => { if (canDrop()) { e.preventDefault(); dropTarget = { kind: 'date', date }; cell.classList.add('drop-target'); if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'; } };
+      cell.addEventListener('dragenter', mark);
+      cell.addEventListener('dragover', mark);
+      cell.addEventListener('dragleave', (e) => {
+        if (!e.relatedTarget || !cell.contains(e.relatedTarget)) {
+          cell.classList.remove('drop-target');
+          if (dropTarget && dropTarget.kind === 'date' && dropTarget.date === date) dropTarget = null;
+        }
       });
-      cell.addEventListener('dragleave', (e) => { if (!e.relatedTarget || !cell.contains(e.relatedTarget)) cell.classList.remove('drop-target'); });
-      cell.addEventListener('drop', async (e) => {
-        if (!dragging || dragging.fromDate === cell.dataset.date) return;
-        e.preventDefault(); e.stopPropagation(); cell.classList.remove('drop-target');
-        const id = dragging.id, toDate = cell.dataset.date;
-        await DB.update('processes', id, { end_date: toDate });
-        toast(`마감일을 ${toDate}로 ${dragging.fromDate ? '변경' : '설정'}했습니다`);
-        dragging = null; render(root);
-      });
+      cell.addEventListener('drop', (e) => { if (canDrop()) { e.preventDefault(); e.stopPropagation(); dropTarget = { kind: 'date', date }; commit(); } });
     });
 
     // 풀 = 드롭 대상 → 마감일 해제(미정)
-    const pool = root.querySelector('#sp-pool-body');
     const poolBox = root.querySelector('#sp-pool');
-    [pool, poolBox].forEach(box => {
-      if (!box) return;
-      box.addEventListener('dragover', (e) => {
-        if (!dragging || !dragging.fromDate) return; // 이미 미정인 건 무시
-        e.preventDefault(); poolBox.classList.add('drop-target');
-        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    if (poolBox) {
+      const canPool = () => dragging && dragging.fromDate;
+      const mark = (e) => { if (canPool()) { e.preventDefault(); dropTarget = { kind: 'pool' }; poolBox.classList.add('drop-target'); if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'; } };
+      poolBox.addEventListener('dragenter', mark);
+      poolBox.addEventListener('dragover', mark);
+      poolBox.addEventListener('dragleave', (e) => {
+        if (!e.relatedTarget || !poolBox.contains(e.relatedTarget)) {
+          poolBox.classList.remove('drop-target');
+          if (dropTarget && dropTarget.kind === 'pool') dropTarget = null;
+        }
       });
-      box.addEventListener('dragleave', (e) => { if (!e.relatedTarget || !poolBox.contains(e.relatedTarget)) poolBox.classList.remove('drop-target'); });
-      box.addEventListener('drop', async (e) => {
-        if (!dragging || !dragging.fromDate) return;
-        e.preventDefault(); e.stopPropagation(); poolBox.classList.remove('drop-target');
-        const id = dragging.id;
-        await DB.update('processes', id, { end_date: '' });
-        toast('마감일을 해제했습니다 (미정)');
-        dragging = null; render(root);
-      });
-    });
+      poolBox.addEventListener('drop', (e) => { if (canPool()) { e.preventDefault(); e.stopPropagation(); dropTarget = { kind: 'pool' }; commit(); } });
+    }
   }
 
   return { render };

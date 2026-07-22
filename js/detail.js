@@ -204,7 +204,11 @@ window.Detail = (function () {
   // ---------- 항목 추가(템플릿 자동 세팅) ----------
   async function addServices(root, c, back) {
     const templates = UI.sortServiceTemplates(await DB.list('service_templates'));
-    const existing = (await DB.list('services', { company_id: c.id })).map(s => String(s.template_id));
+    const existingCounts = {};
+    (await DB.list('services', { company_id: c.id })).forEach(s => {
+      const key = String(s.template_id || '');
+      if (key) existingCounts[key] = (existingCounts[key] || 0) + 1;
+    });
     if (!templates.length) { toast('먼저 [항목 설정] 탭에서 서비스 항목을 만들어 주세요'); return; }
     // 대분류별 그룹
     const groups = {};
@@ -218,12 +222,12 @@ window.Detail = (function () {
           <div class="pick-cat">${esc(cat)}</div>
           <div class="tpl-pick">
             ${groups[cat].map(t => {
-              const added = existing.includes(String(t.id));
-              return `<label class="pick-row ${added ? 'added' : ''}">
-                <input type="checkbox" value="${t.id}" ${added ? 'disabled' : ''}>
+              const addedCount = existingCounts[String(t.id)] || 0;
+              return `<label class="pick-row ${addedCount ? 'dup-ok' : ''}">
+                <input type="checkbox" value="${t.id}">
                 <span class="pick-name">${esc(t.name)}</span>
                 <span class="pick-amt">${UI.moneyVatText(t.default_amount)}</span>
-                ${added ? '<span class="pick-tag">추가됨</span>' : ''}
+                ${addedCount ? `<span class="pick-tag">기존 ${addedCount}개</span>` : ''}
               </label>`;
             }).join('')}
           </div>`).join('')}`,

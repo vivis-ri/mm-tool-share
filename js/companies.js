@@ -40,6 +40,52 @@ window.Companies = (function () {
     return `${start.getFullYear()}년 ${start.getMonth() + 1}월`;
   }
 
+  function ymd(d) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  function addDays(d, n) {
+    const x = new Date(d);
+    x.setDate(x.getDate() + n);
+    return x;
+  }
+
+  function startOfWeek(d) {
+    const x = new Date(d);
+    x.setHours(0, 0, 0, 0);
+    x.setDate(x.getDate() - x.getDay());
+    return x;
+  }
+
+  function formatFullDate(d) {
+    return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  function isoWeekValue(date) {
+    const d = addDays(startOfWeek(date), 1);
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
+    const week1 = new Date(d.getFullYear(), 0, 4);
+    const week = 1 + Math.round(((d - week1) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
+    return `${d.getFullYear()}-W${String(week).padStart(2, '0')}`;
+  }
+
+  function dateFromIsoWeek(value) {
+    const m = String(value || '').match(/^(\d{4})-W(\d{2})$/);
+    if (!m) return startOfWeek(window.Schedule.startToday());
+    const year = Number(m[1]);
+    const week = Number(m[2]);
+    const jan4 = new Date(year, 0, 4);
+    const jan4Day = jan4.getDay() || 7;
+    const monday = new Date(year, 0, 4 - jan4Day + 1 + (week - 1) * 7);
+    return startOfWeek(monday);
+  }
+
+  function nextMonthFirstWeek() {
+    const today = window.Schedule.startToday();
+    return startOfWeek(new Date(today.getFullYear(), today.getMonth() + 1, 1));
+  }
+
   function inRange(value, start, end) {
     const d = parseDate(value);
     return !!(d && d >= start && d < end);
@@ -143,6 +189,8 @@ window.Companies = (function () {
           ${state.scope === 'month' ? `<button class="btn ghost" id="toggle-done">${state.showDone ? '종료업체 숨김' : '종료업체 보임'}</button>` : ''}
           <button class="btn ghost" id="co-pdf-board" title="업체별 프로세스 단계를 상태색으로 한눈에 (가로 PDF)">📄 진행 보드</button>
           <button class="btn ghost" id="co-pdf" title="업체별 진행률 + 서비스 항목별 진행현황 표 (가로 PDF)">📄 요약표</button>
+          <button class="btn ghost" id="co-pdf-cal-all" title="이번 달 전체 업체 마감일 달력 PDF">📅 전체 달력</button>
+          <button class="btn ghost" id="co-pdf-cal-company" title="업체를 선택해 이번 달 마감일 달력 PDF">📅 업체 달력</button>
           <button class="btn ghost only-edit" id="co-share" title="대표님께 읽기전용 웹 링크 + 암호로 공유">🔗 대표님 공유</button>
           <button class="btn primary only-edit" id="co-add">+ 새 업체</button>
         </div>
@@ -402,7 +450,110 @@ window.Companies = (function () {
     root.querySelector('#co-add')?.addEventListener('click', () => editCompany(root));
     root.querySelector('#co-pdf')?.addEventListener('click', () => window.PDF.companies());
     root.querySelector('#co-pdf-board')?.addEventListener('click', () => window.PDF.progressBoard());
+    root.querySelector('#co-pdf-cal-all')?.addEventListener('click', () => openCalendarPdfRange());
+    root.querySelector('#co-pdf-cal-company')?.addEventListener('click', () => openCalendarPdfPicker());
     root.querySelector('#co-share')?.addEventListener('click', () => window.Share && window.Share.open());
+  }
+
+  function calendarRangeControls() {
+    const thisWeek = startOfWeek(window.Schedule.startToday());
+    const nextWeek = addDays(thisWeek, 7);
+    const nextMonth = nextMonthFirstWeek();
+    return `
+      <div class="cal-range-box">
+        <div class="cal-range-grid">
+          <div class="field">
+            <label>시작 주</label>
+            <input class="input" id="cal-start-week" type="week" value="${isoWeekValue(thisWeek)}">
+          </div>
+          <div class="field">
+            <label>기간</label>
+            <select class="select" id="cal-weeks">
+              <option value="1">1주</option>
+              <option value="2">2주</option>
+              <option value="4" selected>4주</option>
+              <option value="6">6주</option>
+              <option value="8">8주</option>
+            </select>
+          </div>
+        </div>
+        <div class="cal-week-presets">
+          <button type="button" data-cal-week="${isoWeekValue(thisWeek)}">이번 주</button>
+          <button type="button" data-cal-week="${isoWeekValue(nextWeek)}">다음 주</button>
+          <button type="button" data-cal-week="${isoWeekValue(nextMonth)}">다음 달 첫 주</button>
+          <button type="button" data-cal-week="${isoWeekValue(nextMonth)}" data-cal-weeks="6">다음 달 6주</button>
+        </div>
+        <div class="cal-range-preview" id="cal-range-preview"></div>
+      </div>`;
+  }
+
+  function readCalendarRange(m) {
+    const start = dateFromIsoWeek(m.querySelector('#cal-start-week')?.value);
+    const weeks = Math.max(1, Math.min(12, Number(m.querySelector('#cal-weeks')?.value) || 4));
+    return { startDate: ymd(start), weeks };
+  }
+
+  function bindCalendarRangeControls(m) {
+    const weekInput = m.querySelector('#cal-start-week');
+    const weeksSelect = m.querySelector('#cal-weeks');
+    const preview = m.querySelector('#cal-range-preview');
+    const update = () => {
+      const range = readCalendarRange(m);
+      const start = new Date(range.startDate + 'T00:00:00');
+      const end = addDays(start, range.weeks * 7 - 1);
+      if (preview) preview.textContent = `${formatFullDate(start)} ~ ${formatFullDate(end)} · ${range.weeks}주`;
+    };
+    m.querySelectorAll('[data-cal-week]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (weekInput) weekInput.value = btn.dataset.calWeek;
+        if (btn.dataset.calWeeks && weeksSelect) weeksSelect.value = btn.dataset.calWeeks;
+        update();
+      });
+    });
+    if (weekInput) weekInput.addEventListener('change', update);
+    if (weeksSelect) weeksSelect.addEventListener('change', update);
+    update();
+  }
+
+  function openCalendarPdfRange() {
+    modal({
+      title: '전체 달력 PDF',
+      wide: true,
+      bodyHTML: `
+        <p class="cal-pdf-lead">마감일 기준으로 전체 업체 달력을 저장합니다. 시작 주와 출력 기간을 주 단위로 선택하세요.</p>
+        ${calendarRangeControls()}`,
+      saveLabel: 'PDF 저장',
+      onOpen: bindCalendarRangeControls,
+      onSave: async (m) => {
+        window.PDF.calendar(null, readCalendarRange(m));
+      }
+    });
+  }
+
+  async function openCalendarPdfPicker() {
+    const companies = (await DB.list('companies')).filter(c => !isHidden(c)).sort(sortByQuoteDate);
+    modal({
+      title: '업체 달력 PDF',
+      wide: true,
+      bodyHTML: `
+        <p class="cal-pdf-lead">마감일 기준으로 업체별 달력을 저장합니다. 시작 주와 출력 기간을 고른 뒤 업체를 눌러 주세요.</p>
+        ${calendarRangeControls()}
+        <div class="cal-pdf-pick">
+          ${companies.length ? companies.map(c => `
+            <button type="button" class="cal-pdf-row" data-cal-co="${c.id}">
+              <span class="cal-pdf-dot" style="${UI.companyDotStyle(c.id)}"></span>
+              <span class="cal-pdf-name">${esc(c.name)}</span>
+              <span class="cal-pdf-meta">${esc(c.item || '항목 미정')} · 담당 ${esc(c.manager || '미지정')}</span>
+            </button>`).join('') : '<div class="cal-pdf-empty">표시할 업체가 없습니다.</div>'}
+        </div>`,
+      saveLabel: '닫기',
+      onOpen: (m) => {
+        bindCalendarRangeControls(m);
+        m.querySelectorAll('[data-cal-co]').forEach(btn => {
+          btn.addEventListener('click', () => window.PDF.calendar(btn.dataset.calCo, readCalendarRange(m)));
+        });
+      }
+    });
   }
 
   function isHiddenFromElement(el) {
