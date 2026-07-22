@@ -1,0 +1,124 @@
+/* ============================================================
+   schedule.css — 프로젝트 일정(월간 드래그 배치)
+   ============================================================ */
+.date-nav.inline { margin: 0; gap: 6px; }
+
+.sp-layout {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 16px;
+  align-items: start;
+  margin-top: 12px;
+}
+
+/* ── 달력 ── */
+.sp-cal .month-dow {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  font-size: 12px; font-weight: 700; color: var(--ink-45);
+  padding: 0 2px 6px;
+}
+.sp-cal .month-dow span { text-align: center; }
+.sp-cal .month-dow .sun { color: var(--st-late); }
+.sp-cal .month-dow .sat { color: var(--st-pause); }
+
+.sp-cells { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.sp-cell {
+  min-height: 104px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 6px 6px 7px;
+  display: flex; flex-direction: column; gap: 5px;
+  transition: border-color .12s, box-shadow .12s, background .12s;
+}
+.sp-cell.empty { background: transparent; border: none; }
+.sp-cell.today { border-color: var(--orange); box-shadow: 0 0 0 2px var(--st-run-bg); }
+.sp-cell.holiday { background: #fff8f7; }
+.sp-cell-top { display: flex; align-items: center; justify-content: space-between; }
+.sp-cell .mnum { font-size: 13px; font-weight: 700; color: var(--ink-70); }
+.sp-cell.sun .mnum { color: var(--st-late); }
+.sp-cell.sat .mnum { color: var(--st-pause); }
+.sp-cell .sp-cnt {
+  font-size: 10px; font-weight: 700; color: var(--ink-45);
+  background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: 8px; padding: 0 6px;
+}
+.mcell-hol { font-size: 10px; color: var(--st-late); font-weight: 600; }
+.sp-cell-items { display: flex; flex-direction: column; gap: 4px; overflow-y: auto; max-height: 150px; }
+
+/* 드롭 하이라이트 */
+.sp-cell.drop-target {
+  border-color: var(--orange); border-style: dashed;
+  background: var(--st-run-bg); box-shadow: 0 0 0 2px var(--st-run-bg);
+}
+.sp-pool.drop-target { border-color: var(--orange); border-style: dashed; background: var(--st-run-bg); }
+
+/* ── 단계 칩 ── */
+.sp-chip {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 11px; line-height: 1.25;
+  padding: 4px 7px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--st-plan);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--ink);
+  user-select: none;
+}
+.sp-chip.draggable { cursor: grab; }
+.sp-chip.draggable:active { cursor: grabbing; }
+.sp-chip.dragging { opacity: .45; }
+.sp-chip .sp-chip-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--st-plan); flex: none; }
+.sp-chip .sp-chip-tx { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-chip.st-plan  { border-left-color: var(--st-plan);  }
+.sp-chip.st-plan  .sp-chip-dot { background: var(--st-plan);  }
+.sp-chip.st-run   { border-left-color: var(--st-run);  background: #fffaf3; }
+.sp-chip.st-run   .sp-chip-dot { background: var(--st-run);  }
+.sp-chip.st-pause { border-left-color: var(--st-pause); }
+.sp-chip.st-pause .sp-chip-dot { background: var(--st-pause); }
+.sp-chip.st-done  { border-left-color: var(--st-done); background: #f6fbf8; }
+.sp-chip.st-done  .sp-chip-dot { background: var(--st-done); }
+.sp-chip.st-late  { border-left-color: var(--st-late); background: #fdf6f6; }
+.sp-chip.st-late  .sp-chip-dot { background: var(--st-late); }
+
+/* ── 미배정 풀 ── */
+.sp-pool {
+  position: sticky; top: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  max-height: calc(100vh - 150px);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.sp-pool-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px 8px; font-weight: 800; font-size: 14px;
+}
+.sp-pool-n {
+  font-size: 12px; font-weight: 700; color: #fff; background: var(--orange);
+  border-radius: 10px; padding: 1px 9px;
+}
+.sp-pool-hint { padding: 0 14px 10px; font-size: 11px; color: var(--ink-45); }
+.sp-pool-body { padding: 0 12px 12px; overflow-y: auto; }
+.sp-pg { margin-bottom: 12px; }
+.sp-pg-co { font-size: 12.5px; font-weight: 800; color: var(--ink); margin: 4px 2px 6px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+.sp-pg-svc { margin: 0 0 8px; }
+.sp-pg-svc-h { display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: var(--ink-70); margin-bottom: 4px; }
+.sp-pg-items { display: flex; flex-direction: column; gap: 4px; }
+.sp-pool-empty { padding: 24px 12px; text-align: center; font-size: 12.5px; color: var(--ink-45); line-height: 1.7; }
+
+/* 필터 칩의 상태 점 */
+.sp-filter .chip .lg { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+.sp-filter .chip .lg.plan { background: var(--st-plan); }
+.sp-filter .chip .lg.run { background: var(--st-run); }
+.sp-filter .chip .lg.pause { background: var(--st-pause); }
+.sp-filter .chip .lg.done { background: var(--st-done); }
+.sp-filter .chip .lg.late { background: var(--st-late); }
+
+/* 반응형 — 좁으면 풀을 아래로 */
+@media (max-width: 900px) {
+  .sp-layout { grid-template-columns: 1fr; }
+  .sp-pool { position: static; max-height: none; }
+}

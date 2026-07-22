@@ -5,6 +5,7 @@
   const views = {
     diary: { el: document.getElementById('view-diary'), mod: () => window.Diary },
     companies: { el: document.getElementById('view-companies'), mod: () => window.Companies },
+    schedule: { el: document.getElementById('view-schedule'), mod: () => window.SchedulePlan },
     settings: { el: document.getElementById('view-settings'), mod: () => window.Settings }
   };
 
