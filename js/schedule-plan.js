@@ -9,8 +9,9 @@ window.SchedulePlan = (function () {
   const { esc, toast } = UI;
   const S = window.Schedule;
   const DOW = S.DOW;
-  const state = { anchor: S.startToday(), companyFilter: null, collapsedSvcs: {} };
+  const state = { anchor: S.startToday(), companyFilters: [], searchTerm: '', searchExact: false, collapsedSvcs: {} };
   let dragging = null; // { id, fromDate|null, startDate, endDate }
+  let searchTimer = null;
 
   function isHidden(c) { return window.Companies && window.Companies.isHidden(c); }
   function isActiveCompany(c) { return window.Companies && window.Companies.isActiveStatus(c.status); }
@@ -55,7 +56,8 @@ window.SchedulePlan = (function () {
       .filter(isActiveCompany)
       .sort(window.Companies ? window.Companies.sortByQuoteDate : undefined);
     const coIds = new Set(companies.map(c => String(c.id)));
-    if (state.companyFilter && !coIds.has(String(state.companyFilter))) state.companyFilter = null;
+    // 사라진(숨김/종료된) 업체는 선택 목록에서 제거
+    state.companyFilters = state.companyFilters.filter(id => coIds.has(String(id)));
 
     const coName = {};
     const coMeta = {};
@@ -73,16 +75,27 @@ window.SchedulePlan = (function () {
 
     const processes = (await DB.list('processes')).filter(p => svcById[p.service_id]);
 
-    // 필터(단일 업체 보기)
-    const inFilter = (companyId) => !state.companyFilter || String(state.companyFilter) === String(companyId);
+    // 필터 ① 여러 업체 선택(비어 있으면 전체)
+    const filterSet = new Set(state.companyFilters.map(String));
+    const hasCompanyFilter = filterSet.size > 0;
+    const inFilter = (companyId) => !hasCompanyFilter || filterSet.has(String(companyId));
+
+    // 필터 ② 프로세스명 검색(완전일치/부분일치)
+    const term = String(state.searchTerm || '').trim().toLowerCase();
+    const matchName = (p) => {
+      if (!term) return true;
+      const name = String(p.name || '').toLowerCase();
+      return state.searchExact ? name === term : name.includes(term);
+    };
 
     // 미배정 풀(company→service→[proc]): end_date 없음 + 종료 아님
     const byCo = {};
     processes.forEach(p => {
       if (p.end_date || p.status === '종료') return;
+      if (!matchName(p)) return;
       const s = svcById[p.service_id];
       const coId = String(s.company_id);
-      if (coMeta[coId]) coMeta[coId]._poolCount += 1;
+      if (coMeta[coId]) coMeta[coId]._poolCount += 1;   // 업체 탭 배지 = 검색 반영, 업체선택과 무관
       if (!inFilter(s.company_id)) return;
       const rec = { ...p, _companyId: s.company_id, _company: coName[coId], _service: s.name };
       const coGroup = (byCo[coId] = byCo[coId] || { id: s.company_id, name: coName[coId], status: coMeta[coId] && coMeta[coId].status, count: 0, svcs: {} });
@@ -94,6 +107,7 @@ window.SchedulePlan = (function () {
     const scheduledByDate = {};
     processes.forEach(p => {
       if (!p.end_date) return;
+      if (!matchName(p)) return;
       const s = svcById[p.service_id];
       if (!inFilter(s.company_id)) return;
       const key = String(p.end_date).slice(0, 10);
@@ -106,8 +120,10 @@ window.SchedulePlan = (function () {
     let poolCount = 0;
     Object.values(byCo).forEach(co => Object.values(co.svcs).forEach(sv => { poolCount += sv.items.length; }));
     const totalPoolCount = Object.values(coMeta).reduce((sum, c) => sum + c._poolCount, 0);
+    let scheduledCount = 0;
+    Object.values(scheduledByDate).forEach(arr => { scheduledCount += arr.length; });
 
-    return { companies: companies.map(c => coMeta[String(c.id)]), byCo, scheduledByDate, poolCount, totalPoolCount };
+    return { companies: companies.map(c => coMeta[String(c.id)]), byCo, scheduledByDate, poolCount, totalPoolCount, scheduledCount };
   }
 
   async function render(root) {
@@ -183,26 +199,44 @@ window.SchedulePlan = (function () {
   }
 
   function renderPool(host, data) {
-    const selected = data.companies.find(c => String(c.id) === String(state.companyFilter));
+    const filters = state.companyFilters.map(String);
+    const selectedNames = data.companies.filter(c => filters.includes(String(c.id))).map(c => c.name);
+    const subText = !filters.length ? '전체 진행업체'
+      : (selectedNames.length === 1 ? selectedNames[0] : `${selectedNames.length}개 업체 선택`);
+    const term = String(state.searchTerm || '').trim();
     const groups = data.companies
       .map(c => [String(c.id), data.byCo[String(c.id)]])
-      .filter(([cid, co]) => co && (!state.companyFilter || String(cid) === String(state.companyFilter)));
+      .filter(([cid, co]) => co);
     host.innerHTML = `
       <div class="sp-pool-head">
         <div>
           <div class="sp-pool-title">마감일 미정</div>
-          <div class="sp-pool-sub">${esc(selected ? selected.name : '전체 진행업체')}</div>
+          <div class="sp-pool-sub">${esc(subText)}</div>
         </div>
         <span class="sp-pool-n">${data.poolCount}</span>
       </div>
+
+      <div class="sp-search">
+        <div class="sp-search-box">
+          <span class="sp-search-ic">🔍</span>
+          <input type="text" id="sp-search" class="sp-search-input" placeholder="프로세스명 검색 (예: 1차시안)" value="${esc(state.searchTerm || '')}" autocomplete="off" spellcheck="false">
+          ${term ? `<button class="sp-search-clear" id="sp-search-clear" type="button" title="검색어 지우기">✕</button>` : ''}
+        </div>
+        <div class="sp-search-modes" role="group" aria-label="검색 방식">
+          <button class="sp-search-mode ${!state.searchExact ? 'on' : ''}" type="button" data-mode="partial">부분일치</button>
+          <button class="sp-search-mode ${state.searchExact ? 'on' : ''}" type="button" data-mode="exact">완전일치</button>
+        </div>
+        ${term ? `<div class="sp-search-hint">‘${esc(term)}’ 결과 · 미정 <b>${data.poolCount}</b> · 달력 배치 <b>${data.scheduledCount}</b></div>` : ''}
+      </div>
+
       ${data.companies.length ? `
         <div class="sp-company-tabs-wrap">
-          <div class="sp-company-tabs-label">업체별 보기</div>
-          <div class="sp-company-tabs" role="tablist" aria-label="업체별 미정 단계">
-            <button class="sp-company-tab ${!state.companyFilter ? 'on' : ''}" type="button" data-co="">
+          <div class="sp-company-tabs-label">업체별 보기 <span class="sp-company-tabs-hint">여러 곳 선택 가능</span></div>
+          <div class="sp-company-tabs" role="group" aria-label="업체별 미정 단계">
+            <button class="sp-company-tab ${!filters.length ? 'on' : ''}" type="button" data-co="">
               <span class="sp-company-tab-name">전체</span><span class="sp-company-tab-n">${data.totalPoolCount}</span>
             </button>
-            ${data.companies.map(c => `<button class="sp-company-tab ${String(state.companyFilter) === String(c.id) ? 'on' : ''}" type="button" data-co="${esc(c.id)}" title="${esc(c.name)}">
+            ${data.companies.map(c => `<button class="sp-company-tab ${filters.includes(String(c.id)) ? 'on' : ''}" type="button" data-co="${esc(c.id)}" title="${esc(c.name)}">
               <i class="lg" style="${UI.companyDotStyle(c.id)}"></i><span class="sp-company-tab-name">${esc(c.name)}</span><span class="sp-company-tab-n">${c._poolCount}</span>
             </button>`).join('')}
           </div>
@@ -232,7 +266,9 @@ window.SchedulePlan = (function () {
               </div>`;
             }).join('')}
           </div>`).join('')
-        : `<div class="sp-pool-empty">진행 중인 업체의 모든 단계에<br>마감일이 잡혀 있습니다.</div>`}
+        : `<div class="sp-pool-empty">${term
+              ? `‘${esc(term)}’와(과) 일치하는<br>마감일 미정 단계가 없습니다.`
+              : (filters.length ? '선택한 업체에 마감일 미정<br>단계가 없습니다.' : '진행 중인 업체의 모든 단계에<br>마감일이 잡혀 있습니다.')}</div>`}
       </div>`;
   }
 
@@ -241,8 +277,44 @@ window.SchedulePlan = (function () {
     root.querySelector('#sp-prev').addEventListener('click', () => { state.anchor = new Date(state.anchor.getFullYear(), state.anchor.getMonth() - 1, 1); render(root); });
     root.querySelector('#sp-next').addEventListener('click', () => { state.anchor = new Date(state.anchor.getFullYear(), state.anchor.getMonth() + 1, 1); render(root); });
     root.querySelector('#sp-today').addEventListener('click', () => { state.anchor = S.startToday(); render(root); });
+    // 업체 탭 — 여러 곳 동시 선택(토글). '전체'는 선택 해제
     root.querySelectorAll('.sp-company-tab').forEach(b => b.addEventListener('click', () => {
-      state.companyFilter = b.dataset.co || null; render(root);
+      const co = b.dataset.co;
+      if (!co) {
+        state.companyFilters = [];
+      } else {
+        const id = String(co);
+        const i = state.companyFilters.findIndex(x => String(x) === id);
+        if (i >= 0) state.companyFilters.splice(i, 1);
+        else state.companyFilters.push(id);
+      }
+      render(root);
+    }));
+
+    // 프로세스명 검색 — 입력(디바운스) + 포커스/커서 유지
+    const searchInput = root.querySelector('#sp-search');
+    if (searchInput) {
+      const rerenderKeepFocus = () => {
+        const caret = searchInput.selectionStart;
+        render(root).then(() => {
+          const box = root.querySelector('#sp-search');
+          if (box) { box.focus(); try { box.setSelectionRange(caret, caret); } catch {} }
+        });
+      };
+      searchInput.addEventListener('input', () => {
+        state.searchTerm = searchInput.value;
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(rerenderKeepFocus, 180);
+      });
+      searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); clearTimeout(searchTimer); state.searchTerm = searchInput.value; rerenderKeepFocus(); }
+      });
+    }
+    const clearBtn = root.querySelector('#sp-search-clear');
+    if (clearBtn) clearBtn.addEventListener('click', () => { clearTimeout(searchTimer); state.searchTerm = ''; render(root); });
+    root.querySelectorAll('.sp-search-mode').forEach(b => b.addEventListener('click', () => {
+      state.searchExact = b.dataset.mode === 'exact';
+      render(root).then(() => { const box = root.querySelector('#sp-search'); if (box && state.searchTerm) box.focus(); });
     }));
     root.querySelectorAll('[data-svc-toggle]').forEach(b => b.addEventListener('click', () => {
       const key = String(b.dataset.svc);

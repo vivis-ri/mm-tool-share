@@ -117,8 +117,8 @@ window.Detail = (function () {
       ? `🚩 ${UI.fmtDate(p.end_date)}`
       : (p.start_date ? UI.fmtDate(p.start_date) : '일정 미정');
     return `
-      <div class="stage-card st-${cls} only-clickable" data-pid="${p.id}">
-        <div class="stage-idx">${i + 1}</div>
+      <div class="stage-card st-${cls} only-clickable" data-pid="${p.id}" data-id="${p.id}">
+        <div class="stage-idx" data-drag-handle title="드래그해서 순서 변경">${i + 1}</div>
         <div class="stage-name">${esc(p.name)}</div>
         <div class="stage-status" data-status-toggle title="클릭해서 상태 변경">${badge(p.status)}</div>
         <div class="stage-meta">
@@ -173,6 +173,18 @@ window.Detail = (function () {
         }, true);
       });
       block.querySelector('[data-add-proc]')?.addEventListener('click', () => editProcess(root, c, back, sid));
+
+      // 프로세스 단계 순서 변경(번호를 잡고 드래그) — 이 서비스 항목 안에서만
+      const board = block.querySelector('.stage-board');
+      if (board) DragSort.enable(board, {
+        itemSelector: '.stage-card', handleSelector: '.stage-idx', horizontal: true,
+        onReorder: async (ids) => {
+          const ordered = ids.filter(Boolean);
+          for (let i = 0; i < ordered.length; i++) await DB.update('processes', ordered[i], { sort_order: i + 1 });
+          toast('단계 순서를 변경했습니다');
+          render(root, c.id, back);
+        }
+      });
 
       block.querySelectorAll('.stage-card').forEach(cardEl => {
         const pid = cardEl.dataset.pid;

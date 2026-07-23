@@ -152,6 +152,80 @@
   border-radius: 10px; padding: 1px 9px;
   flex: none;
 }
+/* ── 프로세스명 검색 ── */
+.sp-search {
+  padding: 11px 12px 12px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+.sp-search-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: var(--surface-2);
+  transition: border-color .15s, box-shadow .15s, background .15s;
+}
+.sp-search-box:focus-within {
+  border-color: var(--orange);
+  background: var(--surface);
+  box-shadow: 0 0 0 2px var(--st-run-bg);
+}
+.sp-search-ic { font-size: 12px; opacity: .6; flex: none; }
+.sp-search-input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.sp-search-input:focus { outline: none; }
+.sp-search-input::placeholder { color: var(--ink-45); font-weight: 500; }
+.sp-search-clear {
+  flex: none;
+  width: 18px; height: 18px;
+  border-radius: 6px;
+  color: var(--ink-45);
+  font-size: 10px;
+  transition: background .12s, color .12s;
+}
+.sp-search-clear:hover { background: var(--st-late-bg); color: var(--st-late); }
+.sp-search-modes {
+  display: flex;
+  gap: 4px;
+  margin-top: 7px;
+}
+.sp-search-mode {
+  flex: 1;
+  padding: 5px 0;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: var(--ink-70);
+  font-size: 11px;
+  font-weight: 700;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.sp-search-mode:hover { border-color: var(--line-strong); color: var(--ink); }
+.sp-search-mode.on {
+  background: var(--orange-soft);
+  border-color: var(--orange);
+  color: var(--orange-deep);
+}
+.sp-search-hint {
+  margin-top: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-45);
+  line-height: 1.4;
+}
+.sp-search-hint b { color: var(--orange-deep); font-weight: 800; }
+
 .sp-company-tabs-wrap {
   padding: 9px 12px 11px;
   border-top: 1px solid var(--line);
@@ -159,10 +233,20 @@
   background: linear-gradient(180deg, var(--surface), var(--surface-2));
 }
 .sp-company-tabs-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
   margin-bottom: 6px;
   font-size: 11px;
   font-weight: 800;
   color: var(--ink-45);
+}
+.sp-company-tabs-hint {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ink-45);
+  opacity: .8;
 }
 .sp-company-tabs {
   display: grid;
