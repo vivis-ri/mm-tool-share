@@ -239,9 +239,23 @@ window.UI = (function () {
     document.body.appendChild(pop);
     const r = (anchorEl && anchorEl.getBoundingClientRect)
       ? anchorEl.getBoundingClientRect()
-      : { bottom: 100, left: window.innerWidth / 2 - 70 };
-    pop.style.top = (r.bottom + 6) + 'px';
-    pop.style.left = Math.min(r.left, window.innerWidth - 160) + 'px';
+      : { top: 100, bottom: 100, left: window.innerWidth / 2 - 70, right: window.innerWidth / 2 + 70 };
+    // 창(뷰포트) 밖으로 잘리지 않도록: 실제 크기를 재서 아래→위 뒤집기 + 좌우/상하 보정
+    const gap = 6, margin = 8;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const pr = pop.getBoundingClientRect();
+    // 좌우: 앵커 왼쪽 기준, 오른쪽이 넘치면 왼쪽으로 당김
+    let left = r.left;
+    if (left + pr.width + margin > vw) left = vw - pr.width - margin;
+    left = Math.max(margin, left);
+    // 상하: 아래 공간이 충분하면 아래, 아니면 위로 뒤집기, 둘 다 부족하면 화면 안으로 클램프
+    const spaceBelow = vh - r.bottom, spaceAbove = r.top;
+    let top;
+    if (spaceBelow >= pr.height + gap + margin) top = r.bottom + gap;
+    else if (spaceAbove >= pr.height + gap + margin) top = r.top - pr.height - gap;
+    else top = Math.max(margin, vh - pr.height - margin);
+    pop.style.top = top + 'px';
+    pop.style.left = left + 'px';
     const close = () => { pop.remove(); document.removeEventListener('click', onDoc, true); };
     function onDoc(e) { if (!pop.contains(e.target)) close(); }
     setTimeout(() => document.addEventListener('click', onDoc, true), 0);

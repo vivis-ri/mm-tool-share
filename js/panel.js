@@ -8,6 +8,8 @@
   const MOVED_TO_PREFIX = 'mm-moved-to:';
   let tab = 'today';
   let cache = null;
+  let selMonthDate = null;   // 월간에서 선택한 날짜(ymd)
+  let expandedCo = null;     // 업체 탭에서 펼친 회사 id
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
   function statusClass(s) { return ({ '예정': 'plan', '진행중': 'run', '일시정지': 'pause', '종료': 'done', '지연': 'late' })[s] || 'plan'; }
@@ -121,33 +123,64 @@
       const cells = [];
       for (let i = 0; i < pad; i++) cells.push(null);
       for (let d = 1; d <= dim; d++) cells.push(new Date(y, m, d));
+      // 선택 날짜가 이번 달이 아니면 오늘로
+      let selKey = selMonthDate;
+      if (!selKey || !cells.some(d => d && S.ymd(d) === selKey)) selKey = S.ymd(today);
+      selMonthDate = selKey;
       content.innerHTML = `<div class="p-month-t">${y}. ${m + 1}</div>
         <div class="p-month">
           ${DOW.map(d => `<span class="p-mh">${d}</span>`).join('')}
           ${cells.map(d => {
             if (!d) return '<span class="p-mc empty"></span>';
-            const items = itemsFor(d, data).filter(i => i.type !== 'd');
-            const prog = progressOf(items);
+            const key = S.ymd(d);
+            const items = itemsFor(d, data);
+            const active = items.filter(i => i.type !== 'd');
+            const prog = progressOf(active);
             const hol = S.holidayName(d);
-            return `<span class="p-mc ${S.isToday(d) ? 'today' : ''} ${hol ? 'hol' : ''}">
-              <b>${d.getDate()}</b>${items.length ? `<i class="${prog.done === prog.total ? 'full' : ''}" style="height:${Math.max(4, prog.pct / 10)}px"></i>` : ''}</span>`;
+            const dot = items.length
+              ? `<i class="${prog.total && prog.done === prog.total ? 'full' : ''}"></i>`
+              : '';
+            return `<span class="p-mc ${S.isToday(d) ? 'today' : ''} ${hol ? 'hol' : ''} ${key === selKey ? 'sel' : ''}" data-date="${key}">
+              <b>${d.getDate()}</b>${dot}</span>`;
           }).join('')}
-        </div>`;
+        </div>
+        <div class="p-month-detail" id="p-month-detail"></div>`;
+      renderMonthDetail(selKey, data);
+      content.querySelectorAll('.p-mc[data-date]').forEach(cell =>
+        cell.addEventListener('click', () => { selMonthDate = cell.dataset.date; render(); }));
     }
     else if (tab === 'co') {
       heading.textContent = '프로젝트 현황';
-      const svcByCo = {}; data.services.forEach(s => svcByCo[s.company_id] = svcByCo[s.company_id] || []);
       const procByCo = {}; const svcCo = {}; data.services.forEach(s => svcCo[s.id] = s.company_id);
       data.processes.forEach(p => { const co = svcCo[p.service_id]; if (co) (procByCo[co] = procByCo[co] || []).push(p); });
       content.innerHTML = data.companies.length ? data.companies.map(c => {
         const ps = procByCo[c.id] || [];
         const done = ps.filter(p => p.status === '종료').length;
+        const total = ps.length;
+        const pct = total ? Math.round(done / total * 100) : 0;
+        const full = total && done === total;
         const cur = ps.find(p => ['진행중', '지연', '일시정지'].includes(p.status));
-        return `<div class="p-co">
-          <div class="p-co-h"><b>${esc(c.name)}</b><span class="badge ${statusClass(c.status)}">${esc(c.status)}</span></div>
-          <div class="p-co-m">${cur ? '현재 ' + esc(cur.name) + ' · ' : ''}${ps.length ? `완료 ${done}/${ps.length}` : '항목 없음'}</div>
+        const open = String(expandedCo) === String(c.id);
+        const svcs = data.services.filter(s => String(s.company_id) === String(c.id));
+        return `<div class="p-co ${open ? 'open' : ''}" data-co="${esc(c.id)}">
+          <button class="p-co-h" data-co-toggle type="button">
+            <span class="p-co-name"><b>${esc(c.name)}</b><span class="badge ${statusClass(c.status)}">${esc(c.status)}</span></span>
+            <span class="p-co-caret">▾</span>
+          </button>
+          ${total
+            ? `<div class="p-progress ${full ? 'full' : ''}"><span style="width:${pct}%"></span><b>${pct}%</b></div>
+               <div class="p-co-m">${cur ? '현재 · ' + esc(cur.name) + ' · ' : ''}완료 ${done}/${total}</div>`
+            : `<div class="p-co-m">항목 없음</div>`}
+          ${open ? coDetail(svcs, procByCo, data) : ''}
         </div>`;
       }).join('') : `<div class="p-empty">등록된 업체가 없어요</div>`;
+      content.querySelectorAll('[data-co-toggle]').forEach(b => b.addEventListener('click', () => {
+        const id = b.closest('.p-co').dataset.co;
+        expandedCo = String(expandedCo) === String(id) ? null : id;
+        render();
+      }));
+      const openMain = content.querySelector('[data-open-main]');
+      if (openMain) openMain.addEventListener('click', () => window.mm && window.mm.openMain());
     }
 
     // 공통 하단 요약
@@ -166,6 +199,48 @@
     if (!p.total) return '';
     return `<div class="p-progress ${p.done === p.total ? 'full' : ''}">
       <span style="width:${p.pct}%"></span><b>${p.pct}%</b>
+    </div>`;
+  }
+
+  // 월간 — 선택한 날짜의 업무일지 리스트
+  function renderMonthDetail(dateKey, data) {
+    const box = document.getElementById('p-month-detail');
+    if (!box) return;
+    const d = parseDate(dateKey);
+    if (!d) { box.innerHTML = ''; return; }
+    const items = itemsFor(d, data);
+    const prog = progressOf(items);
+    const hol = S.holidayName(d);
+    box.innerHTML = `
+      <div class="p-md-h"><b>${d.getMonth() + 1}.${d.getDate()}</b> <span>${DOW[d.getDay()]}</span>${hol ? `<em>${esc(hol)}</em>` : ''}</div>
+      ${items.length
+        ? panelProgress(prog) + items.map(taskRow).join('')
+        : `<div class="p-none">이 날은 등록된 업무가 없어요</div>`}`;
+    bindChecks(box, dateKey, data);
+  }
+
+  // 업체 — 펼쳤을 때 서비스 항목별 단계 상세
+  function coDetail(svcs, procByCo, data) {
+    const procBySvc = {};
+    data.processes.forEach(p => { (procBySvc[p.service_id] = procBySvc[p.service_id] || []).push(p); });
+    const body = svcs.length ? svcs.map(s => {
+      const ps = procBySvc[s.id] || [];
+      const d = ps.filter(p => p.status === '종료').length;
+      const pct = ps.length ? Math.round(d / ps.length * 100) : 0;
+      const full = ps.length && d === ps.length;
+      return `<div class="p-svc">
+        <div class="p-svc-h">
+          <span class="p-svc-n">${esc(s.name)}</span>
+          <span class="badge ${statusClass(s.status)}">${esc(s.status)}</span>
+          <span class="p-svc-pct ${full ? 'full' : ''}">${ps.length ? pct + '%' : '-'}</span>
+        </div>
+        ${ps.length ? `<div class="p-stages">${ps.map(p =>
+          `<span class="p-stage st-${statusClass(p.status)}" title="${esc(s.name)} · ${esc(p.name)} · ${esc(p.status || '예정')}${p.end_date ? ' · 마감 ' + esc(String(p.end_date).slice(0, 10)) : ''}">${esc(p.name)}</span>`
+        ).join('')}</div>` : '<div class="p-none">단계 없음</div>'}
+      </div>`;
+    }).join('') : `<div class="p-none">서비스 항목이 없어요</div>`;
+    return `<div class="p-co-detail">${body}
+      <button class="p-co-open" data-open-main type="button">대시보드에서 자세히 보기 →</button>
     </div>`;
   }
 

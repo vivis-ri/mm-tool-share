@@ -63,21 +63,54 @@ html, body { height: 100%; background: transparent; }
 .p-month-t { font-size: 12px; font-weight: 700; text-align: center; padding: 4px 0 8px; }
 .p-month { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
 .p-mh { font-size: 9.5px; text-align: center; color: var(--ink-45); font-weight: 700; padding: 2px 0; }
-.p-mc { aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border-radius: 7px; font-size: 10.5px; position: relative; }
+.p-mc { aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border-radius: 7px; font-size: 10.5px; position: relative; cursor: pointer; transition: background .12s, box-shadow .12s; }
+.p-mc[data-date]:hover { background: rgba(0,0,0,.06); }
 .p-mc b { font-weight: 600; }
-.p-mc.empty { visibility: hidden; }
+.p-mc.empty { visibility: hidden; cursor: default; }
 .p-mc.today { background: var(--orange); color: #fff; }
+.p-mc.today:hover { background: var(--orange-deep); }
+.p-mc.sel { box-shadow: inset 0 0 0 2px var(--orange); }
+.p-mc.today.sel { box-shadow: inset 0 0 0 2px #fff; }
 .p-mc.hol b { color: var(--st-late); }
 .p-mc.today.hol b { color: #fff; }
 .p-mc i { width: 5px; height: 5px; border-radius: 50%; background: var(--ink-45); }
 .p-mc i.full { background: var(--st-done); }
 .p-mc.today i { background: #fff; }
 
+/* 월간 — 선택 날짜 상세 */
+.p-month-detail { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(0,0,0,.07); }
+.p-md-h { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; padding: 0 6px 6px; }
+.p-md-h span { color: var(--ink-45); font-weight: 600; }
+.p-md-h em { font-style: normal; font-size: 10.5px; color: var(--st-late); font-weight: 600; }
+
 /* 업체 */
-.p-co { padding: 9px 10px; border-radius: 10px; background: rgba(0,0,0,.03); margin-bottom: 6px; }
-.p-co-h { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-.p-co-h b { font-size: 13px; font-weight: 700; }
-.p-co-m { font-size: 11px; color: var(--ink-45); margin-top: 3px; }
+.p-co { padding: 9px 10px; border-radius: 10px; background: rgba(0,0,0,.03); margin-bottom: 6px; transition: background .12s; }
+.p-co.open { background: rgba(0,0,0,.05); }
+.p-co-h { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 6px; text-align: left; cursor: pointer; }
+.p-co-name { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.p-co-name b { font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p-co-caret { flex: none; color: var(--ink-45); font-size: 10px; transition: transform .15s; }
+.p-co.open .p-co-caret { transform: rotate(180deg); }
+.p-co .p-progress { margin: 6px 0 0; height: 13px; }
+.p-co-m { font-size: 11px; color: var(--ink-45); margin-top: 4px; }
+
+/* 업체 — 펼침 상세 */
+.p-co-detail { margin-top: 9px; padding-top: 9px; border-top: 1px dashed rgba(0,0,0,.12); display: flex; flex-direction: column; gap: 8px; }
+.p-svc { background: rgba(255,255,255,.6); border: 1px solid rgba(0,0,0,.06); border-radius: 9px; padding: 8px 9px; }
+.p-svc-h { display: flex; align-items: center; gap: 6px; }
+.p-svc-n { flex: 1; min-width: 0; font-size: 12px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p-svc-h .badge { font-size: 9.5px; padding: 1px 6px; }
+.p-svc-pct { flex: none; font-size: 10.5px; font-weight: 800; color: var(--ink-45); }
+.p-svc-pct.full { color: var(--st-done); }
+.p-stages { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; }
+.p-stage { font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 999px; border: 1px solid transparent; white-space: nowrap; cursor: default; }
+.p-stage.st-plan { color: var(--st-plan); background: var(--st-plan-bg); }
+.p-stage.st-run { color: var(--orange-deep); background: var(--st-run-bg); }
+.p-stage.st-pause { color: var(--st-pause); background: var(--st-pause-bg); }
+.p-stage.st-done { color: var(--st-done); background: var(--st-done-bg); }
+.p-stage.st-late { color: var(--st-late); background: var(--st-late-bg); }
+.p-co-open { align-self: flex-start; font-size: 11px; font-weight: 700; color: var(--orange-deep); padding: 2px 2px; }
+.p-co-open:hover { text-decoration: underline; }
 .badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: 999px; font-size: 10.5px; font-weight: 700; white-space: nowrap; }
 .badge::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
 .badge.plan { color: var(--st-plan); background: var(--st-plan-bg); }

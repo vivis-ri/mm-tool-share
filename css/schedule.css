@@ -436,6 +436,36 @@
 .sp-pg-svc.collapsed .sp-pg-items { display: none; }
 .sp-pool-empty { padding: 24px 12px; text-align: center; font-size: 12.5px; color: var(--ink-45); line-height: 1.7; }
 
+/* ── 호버 상세 툴팁 ── */
+.sp-tip {
+  position: fixed;
+  z-index: 9999;
+  max-width: 280px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: var(--ink, #2A2B29);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.5;
+  box-shadow: 0 10px 30px rgba(0,0,0,.28);
+  pointer-events: none;
+  white-space: normal;
+  word-break: break-word;
+}
+.sp-tip-line { display: block; }
+.sp-tip-head { font-weight: 800; font-size: 12.5px; margin-bottom: 2px; }
+.sp-tip-k {
+  display: inline-block;
+  min-width: 42px;
+  margin-right: 6px;
+  color: rgba(255,255,255,.55);
+  font-weight: 700;
+  font-size: 11px;
+}
+.sp-chip { cursor: help; }
+.sp-chip.draggable { cursor: grab; }
+.sp-chip.draggable:active { cursor: grabbing; }
+
 /* 필터 칩의 상태 점 */
 .sp-filter .chip .lg { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; }
 .sp-filter .chip .lg.plan { background: var(--st-plan); }

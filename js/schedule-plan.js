@@ -28,6 +28,25 @@ window.SchedulePlan = (function () {
     if (place === 'cal' && start && !end) return `시작 ${UI.fmtDate(start)}`;
     return '';
   }
+  function fullSchedText(p) {
+    const s = dateValue(p.start_date), e = dateValue(p.end_date);
+    if (s && e && s !== e) return `${UI.fmtDate(s)} ~ ${UI.fmtDate(e)}`;
+    if (e) return `마감 ${UI.fmtDate(e)}`;
+    if (s) return `시작 ${UI.fmtDate(s)}`;
+    return '아직 미정';
+  }
+  function chipTip(p) {
+    const lines = [
+      `업체 · ${p._company || '-'}`,
+      `서비스 · ${p._service || '-'}`,
+      `단계 · ${p.name || '-'}`,
+      `상태 · ${p.status || '예정'}`,
+      `일정 · ${fullSchedText(p)}`
+    ];
+    if (p.assignee) lines.push(`담당 · ${p.assignee}`);
+    if (p.memo) lines.push(`메모 · ${p.memo}`);
+    return lines.join('\n');
+  }
   function rangePatch(drag, targetDate) {
     if (!drag.fromDate) return { end_date: targetDate };
     const from = dateValue(drag.fromDate);
@@ -161,12 +180,11 @@ window.SchedulePlan = (function () {
     // place: 'cal' | 'pool'
     const label = `${esc(p._service || '항목')} · ${esc(p.name)}`;
     const sched = chipScheduleText(p, place);
-    const titleDates = sched ? ` · ${sched}` : '';
     const schedHTML = sched
       ? `<span class="sp-chip-sched">${sched.split(' · ').map(x => `<i>${esc(x)}</i>`).join('')}</span>`
       : '';
     return `<div class="sp-chip st-${stClass(p.status)} ${DB.READONLY ? '' : 'draggable'}"
-        draggable="${DB.READONLY ? 'false' : 'true'}" data-pid="${p.id}" data-place="${place}" data-start="${esc(dateValue(p.start_date))}" data-end="${esc(dateValue(p.end_date))}" style="${UI.companyStyle(p._companyId)}" title="${esc(p._company)} · ${esc(p._service)} · ${esc(p.name)} (${esc(p.status || '예정')})${esc(titleDates)}">
+        draggable="${DB.READONLY ? 'false' : 'true'}" data-pid="${p.id}" data-place="${place}" data-start="${esc(dateValue(p.start_date))}" data-end="${esc(dateValue(p.end_date))}" style="${UI.companyStyle(p._companyId)}" data-tip="${esc(chipTip(p))}">
         <span class="sp-chip-main"><span class="sp-chip-dot"></span><span class="sp-chip-tx">${label}</span></span>
         ${schedHTML}</div>`;
   }
@@ -236,7 +254,7 @@ window.SchedulePlan = (function () {
             <button class="sp-company-tab ${!filters.length ? 'on' : ''}" type="button" data-co="">
               <span class="sp-company-tab-name">전체</span><span class="sp-company-tab-n">${data.totalPoolCount}</span>
             </button>
-            ${data.companies.map(c => `<button class="sp-company-tab ${filters.includes(String(c.id)) ? 'on' : ''}" type="button" data-co="${esc(c.id)}" title="${esc(c.name)}">
+            ${data.companies.map(c => `<button class="sp-company-tab ${filters.includes(String(c.id)) ? 'on' : ''}" type="button" data-co="${esc(c.id)}" data-tip="${esc(c.name + '\n미정 ' + c._poolCount + '개')}">
               <i class="lg" style="${UI.companyDotStyle(c.id)}"></i><span class="sp-company-tab-name">${esc(c.name)}</span><span class="sp-company-tab-n">${c._poolCount}</span>
             </button>`).join('')}
           </div>
@@ -258,7 +276,7 @@ window.SchedulePlan = (function () {
               const collapsed = !!state.collapsedSvcs[String(sid)];
               return `
               <div class="sp-pg-svc ${collapsed ? 'collapsed' : ''}">
-                <button class="sp-pg-svc-h" type="button" data-svc-toggle data-svc="${esc(sid)}" aria-expanded="${collapsed ? 'false' : 'true'}">
+                <button class="sp-pg-svc-h" type="button" data-svc-toggle data-svc="${esc(sid)}" aria-expanded="${collapsed ? 'false' : 'true'}" data-tip="${esc(co.name + '\n' + sv.name + '\n' + sv.status + ' · 미정 ' + sv.items.length + '개')}">
                   <span class="sp-svc-title"><span class="badge ${stClass(sv.status)}">${esc(sv.status)}</span><span class="sp-svc-name">${esc(sv.name)}</span></span>
                   <span class="sp-svc-right"><span class="sp-svc-meta">${sv.items.length}</span><span class="sp-svc-caret">▾</span></span>
                 </button>
@@ -332,8 +350,63 @@ window.SchedulePlan = (function () {
       render(root);
     });
 
+    setupTips(root);
+
     if (DB.READONLY) return;
     bindDnD(root);
+  }
+
+  // 잘리는 텍스트(칩·업체탭·서비스명)에 마우스를 올리면 전체 상세를 보여주는 툴팁
+  let tipEl = null;
+  function setupTips(root) {
+    if (!tipEl) {
+      tipEl = document.createElement('div');
+      tipEl.className = 'sp-tip';
+      tipEl.style.display = 'none';
+      document.body.appendChild(tipEl);
+    }
+    if (root._tipBound) return;   // 델리게이션은 컨테이너당 1회만
+    root._tipBound = true;
+
+    const hide = () => { tipEl.style.display = 'none'; };
+    const position = (x, y) => {
+      const pad = 12;
+      const r = tipEl.getBoundingClientRect();
+      let left = x + 14, top = y + 16;
+      if (left + r.width + pad > window.innerWidth) left = x - r.width - 14;
+      if (top + r.height + pad > window.innerHeight) top = y - r.height - 16;
+      tipEl.style.left = Math.max(pad, left) + 'px';
+      tipEl.style.top = Math.max(pad, top) + 'px';
+    };
+    const show = (el, x, y) => {
+      const tip = el.getAttribute('data-tip');
+      if (!tip) return;
+      tipEl.innerHTML = tip.split('\n').map(line => {
+        const i = line.indexOf(' · ');
+        if (i > 0) return `<div class="sp-tip-line"><span class="sp-tip-k">${esc(line.slice(0, i))}</span>${esc(line.slice(i + 3))}</div>`;
+        return `<div class="sp-tip-line sp-tip-head">${esc(line)}</div>`;
+      }).join('');
+      tipEl.style.display = 'block';
+      position(x, y);
+    };
+
+    root.addEventListener('mouseover', (e) => {
+      const el = e.target.closest('[data-tip]');
+      if (el && root.contains(el)) show(el, e.clientX, e.clientY);
+    });
+    root.addEventListener('mousemove', (e) => {
+      if (tipEl.style.display !== 'block') return;
+      const el = e.target.closest('[data-tip]');
+      if (el && root.contains(el)) position(e.clientX, e.clientY);
+      else hide();
+    });
+    root.addEventListener('mouseout', (e) => {
+      const el = e.target.closest('[data-tip]');
+      if (!el) return;
+      if (!e.relatedTarget || !el.contains(e.relatedTarget)) hide();
+    });
+    root.addEventListener('mouseleave', hide);
+    window.addEventListener('scroll', hide, true);
   }
 
   function bindDnD(root) {
