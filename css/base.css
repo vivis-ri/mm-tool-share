@@ -221,3 +221,51 @@ body.readonly .drag-handle { display: none; }
 .sp-item { display: flex; padding: 6px 10px; border-radius: 8px; transition: background .1s; }
 .sp-item:hover { background: var(--surface-2); }
 .sp-item.on { background: var(--orange-soft); }
+
+/* ============================================================
+   모바일 대응 — 대표님이 폰에서 열람할 때(공유 링크)
+   좁은 화면에선 사이드바를 상단 가로 바로 전환
+   ============================================================ */
+@media (max-width: 760px) {
+  /* 데스크톱 앱셸은 body를 overflow:hidden으로 잠그고 .content가 내부 스크롤하지만,
+     모바일에선 페이지(body) 자체가 세로 스크롤해야 아래 내용이 잘리지 않음.
+     overflow-x는 clip으로 가로 넘침(왼쪽 겹침)만 차단(세로 스크롤은 유지). */
+  html, body { height: auto; min-height: 100%; max-width: 100%; }
+  body { overflow-x: clip; overflow-y: visible; }
+
+  .app { flex-direction: column; height: auto; min-height: 100vh; min-height: 100dvh; width: 100%; }
+
+  /* 사이드바 → 상단 고정 가로 바 */
+  .sidebar {
+    width: 100%;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    position: sticky; top: 0; z-index: 100;
+    overflow-x: auto;
+    box-shadow: 0 2px 10px rgba(0,0,0,.18);
+  }
+  .sidebar::-webkit-scrollbar { height: 0; display: none; }
+  .brand { padding: 0 4px 0 2px; margin: 0; gap: 8px; flex-shrink: 0; }
+  .brand-mark { width: 32px; height: 32px; font-size: 14px; border-radius: 9px; }
+  .brand-text { display: none; }
+
+  .nav { flex-direction: row; gap: 6px; flex: 0 0 auto; }
+  .nav-item { padding: 8px 12px; font-size: 13px; border-radius: 9px; white-space: nowrap; }
+  .nav-item .ic { font-size: 15px; width: auto; }
+
+  /* 업체 바로가기·미니패널 버튼은 모바일에선 숨김(프로젝트 현황 탭으로 접근) */
+  .nav-co, .sidebar-foot { display: none; }
+
+  /* 콘텐츠는 페이지 스크롤로 */
+  .content { overflow-y: visible; }
+  .view { padding: 18px 14px 48px; max-width: 100%; }
+
+  /* 헤더는 세로로 쌓고, 액션 버튼들은 줄바꿈되게(가로 넘침 방지) */
+  .page-head { flex-direction: column; align-items: stretch; margin-bottom: 18px; }
+  .page-title { font-size: 21px; }
+  .page-sub { font-size: 12.5px; }
+  .head-actions { flex-wrap: wrap; }
+  .head-actions > * { flex-shrink: 0; }
+}

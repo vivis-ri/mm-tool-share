@@ -109,4 +109,13 @@ body.readonly .stage-card:hover { transform: none; box-shadow: none; }
   .d-info { grid-template-columns: repeat(2, 1fr); }
   .proc-th { display: none; }
   .proc-tr { grid-template-columns: 1fr 1fr; }
+  /* 서비스 헤더가 좁은 폭에서 접히도록(가로 넘침 방지) */
+  .svc-head { flex-wrap: wrap; gap: 8px; }
+  .svc-head-l { flex-wrap: wrap; }
+  .svc-head-r { margin-left: auto; }
+  .d-topbar { flex-wrap: wrap; }
+  .co-select { max-width: 100%; }
+}
+@media (max-width: 480px) {
+  .d-info { grid-template-columns: 1fr; }
 }

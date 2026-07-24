@@ -39,9 +39,6 @@
     const total = items.length;
     return { done, total, pct: total ? Math.round(done / total * 100) : 0 };
   }
-  // 마감 항목의 안정적인 체크 키(회사|서비스|단계 + 날짜) — 저장/조회에 공통 사용
-  function dlKey(d, dateKey) { return 'dl:' + dateKey + ':' + d.company + '|' + d.service + '|' + d.stage; }
-
   async function loadData() {
     const routines = await DB.list('routines', { person });
     const checks = await DB.list('task_checks', { person });
@@ -50,13 +47,13 @@
     const services = (await DB.list('services')).filter(s => companyIds.has(String(s.company_id)));
     const serviceIds = new Set(services.map(s => String(s.id)));
     const processes = (await DB.list('processes')).filter(p => serviceIds.has(String(p.service_id)));
-    const checkMap = {}, oneoffs = {}, dlMap = {};
+    const checkMap = {}, oneoffs = {};
     checks.forEach(ch => {
-      if (ch.deadline_key) dlMap[ch.deadline_key] = ch;
-      else if (ch.routine_id) checkMap['r_' + ch.routine_id + '_' + ch.date] = ch;
+      if (ch.deadline_key) return;                        // 옛 마감 체크행은 사용 안 함 — 프로세스 단계 상태로 대체
+      if (ch.routine_id) checkMap['r_' + ch.routine_id + '_' + ch.date] = ch;
       else (oneoffs[ch.date] = oneoffs[ch.date] || []).push(ch);
     });
-    return { routines, checkMap, oneoffs, dlMap, companies, services, processes, deadlines: S.deadlineMap(companies, services, processes) };
+    return { routines, checkMap, oneoffs, companies, services, processes, deadlines: S.deadlineMap(companies, services, processes) };
   }
 
   function itemsFor(date, data) {
@@ -68,15 +65,14 @@
     }).filter(Boolean);
     (data.oneoffs[key] || []).forEach(o => items.push({ type: 'o', id: o.id, title: o.title, done: o.done }));
     (data.deadlines[key] || []).forEach(d => {
-      const dk = dlKey(d, key);
-      const ch = data.dlMap[dk];
-      items.push({ type: 'd', dlKey: dk, title: `${d.company} · ${d.stage} 마감`, done: ch ? ch.done : false });
+      // 마감(🚩)은 프로세스 단계 상태(종료 여부)를 그대로 사용 — 업무일지·프로젝트 현황과 동일 기준
+      items.push({ type: 'd', pid: d.pid, companyId: d.company_id, title: `${d.company} · ${d.stage} 마감`, done: d.status === '종료' });
     });
     return items;
   }
 
   function taskRow(it) {
-    if (it.type === 'd') return `<label class="p-task deadline ${it.done ? 'done' : ''}" data-type="d" data-key="${esc(it.dlKey)}" data-title="${esc(it.title)}">
+    if (it.type === 'd') return `<label class="p-task deadline ${it.done ? 'done' : ''}" data-type="d" data-id="${esc(it.pid)}" data-company="${esc(it.companyId)}">
       <input type="checkbox" ${it.done ? 'checked' : ''}><span class="flag">🚩</span><span>${esc(it.title)}</span></label>`;
     return `<label class="p-task ${it.done ? 'done' : ''}" data-type="${it.type}" data-id="${it.id}">
       <input type="checkbox" ${it.done ? 'checked' : ''}><span>${esc(it.title)}</span></label>`;
@@ -250,21 +246,46 @@
         const t = cb.closest('.p-task');
         const day = t.closest('.p-day');
         const useDate = day ? day.dataset.date : dateKey;
-        await toggle(t.dataset.type, t.dataset.id, useDate, cb.checked, data.routines, { key: t.dataset.key, title: t.dataset.title });
+        await toggle(t.dataset.type, t.dataset.id, useDate, cb.checked, data.routines, { company: t.dataset.company });
         cache = null; render();
       });
     });
   }
 
+  // 마감 체크로 단계 상태가 바뀌면 서비스·업체 상태도 함께 정리(프로젝트 현황과 동일 규칙)
+  function aggregateStatus(statuses) {
+    if (!statuses.length) return null;
+    if (statuses.every(s => s === '종료')) return '종료';
+    if (statuses.includes('지연')) return '지연';
+    if (statuses.includes('진행중')) return '진행중';
+    if (statuses.includes('일시정지')) return '일시정지';
+    if (statuses.includes('종료')) return '진행중';
+    return '예정';
+  }
+  async function rollupCompany(companyId) {
+    if (!companyId) return;
+    const services = await DB.list('services', { company_id: companyId });
+    const serviceStatuses = [];
+    for (const s of services) {
+      const procs = await DB.list('processes', { service_id: s.id });
+      const next = aggregateStatus(procs.map(p => p.status || '예정'));
+      if (next && s.status !== next) await DB.update('services', s.id, { status: next });
+      serviceStatuses.push(next || s.status || '예정');
+    }
+    const co = (await DB.list('companies', { id: companyId }))[0];
+    if (co) {
+      const nextCo = aggregateStatus(serviceStatuses);
+      if (nextCo && co.status !== nextCo) await DB.update('companies', companyId, { status: nextCo });
+    }
+  }
+
   async function toggle(type, id, date, done, routines, extra) {
     if (DB.READONLY) return;
     if (type === 'd') {
-      const key = extra && extra.key;
-      if (!key) return;
-      const checks = await DB.list('task_checks');
-      const existing = checks.find(ch => ch.deadline_key === key && ch.date === date);
-      if (existing) await DB.update('task_checks', existing.id, { done });
-      else await DB.insert('task_checks', { routine_id: null, deadline_key: key, person, title: (extra && extra.title) || '', date, done });
+      // 마감 체크 = 그 프로세스 단계를 종료/진행중으로 → 업무일지·프로젝트 현황과 동기화
+      if (!id) return;
+      await DB.update('processes', id, { status: done ? '종료' : '진행중' });
+      await rollupCompany(extra && extra.company);
       return;
     }
     if (type === 'r') {
@@ -282,6 +303,25 @@
   document.getElementById('p-close').addEventListener('click', () => window.mm && window.mm.closePanel());
   document.getElementById('p-open').addEventListener('click', () => window.mm && window.mm.openMain());
   document.getElementById('p-refresh').addEventListener('click', () => { cache = null; render(); });
+
+  // 핀(항상 위에 고정) 토글 — Electron 전용. 웹에선 버튼 숨김
+  const pinBtn = document.getElementById('p-pin');
+  if (pinBtn) {
+    if (window.mm && window.mm.setPanelPin) {
+      const applyPinUI = (on) => {
+        pinBtn.classList.toggle('on', !!on);
+        pinBtn.title = on ? '항상 위에 고정: 켜짐 (클릭하면 해제)' : '항상 위에 고정: 꺼짐 (클릭하면 고정)';
+      };
+      window.mm.getPanelPin().then(applyPinUI).catch(() => applyPinUI(true));
+      pinBtn.addEventListener('click', async () => {
+        const next = !pinBtn.classList.contains('on');
+        const saved = await window.mm.setPanelPin(next);
+        applyPinUI(saved);
+      });
+    } else {
+      pinBtn.style.display = 'none';
+    }
+  }
 
   render();
   setInterval(() => { cache = null; render(); }, 60000);

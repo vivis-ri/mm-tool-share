@@ -133,6 +133,7 @@
 /* 상태별 칸반 */
 .kanban { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; align-items: start; }
 @media (max-width: 1040px) { .kanban { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 520px) { .kanban { grid-template-columns: 1fr; } }
 .kan-col { background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; padding: 10px; min-height: 130px; }
 .kan-head { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px 11px; font-weight: 700; font-size: 13.5px; }
 .kan-head .kan-n { font-size: 12px; background: rgba(0,0,0,.06); padding: 1px 9px; border-radius: 999px; color: var(--ink-70); }

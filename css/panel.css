@@ -23,6 +23,9 @@ html, body { height: 100%; background: transparent; }
 .panel-tools { -webkit-app-region: no-drag; display: flex; gap: 2px; }
 .pbtn { width: 26px; height: 26px; border-radius: 7px; color: var(--ink-45); font-size: 13px; transition: all .12s; }
 .pbtn:hover { background: rgba(0,0,0,.06); color: var(--ink); }
+#p-pin { font-size: 12px; filter: grayscale(1); opacity: .5; }
+#p-pin.on { background: var(--orange); filter: none; opacity: 1; }
+#p-pin.on:hover { background: var(--orange); }
 
 .panel-tabs { display: flex; gap: 4px; padding: 0 12px 8px; -webkit-app-region: no-drag; }
 .ptab { flex: 1; padding: 6px 4px; border-radius: 8px; font-size: 12px; font-weight: 600; color: var(--ink-45); background: rgba(0,0,0,.04); transition: all .12s; }
