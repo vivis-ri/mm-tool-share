@@ -130,6 +130,10 @@ button { cursor: pointer; border: none; background: none; }
 .btn.danger:hover { background: var(--st-late-bg); border-color: var(--st-late); }
 .icon-btn { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: var(--ink-45); transition: all .15s; }
 .icon-btn:hover { background: var(--surface-2); color: var(--ink); }
+/* 기간 이동 버튼(‹ ›) — 크고 또렷하게 (대표님 가독성) */
+.date-nav .icon-btn { width: 44px; height: 44px; border-radius: 11px; font-size: 26px; font-weight: 700; color: var(--ink-70); border: 1px solid var(--line); }
+.date-nav .icon-btn:hover { background: var(--surface-2); color: var(--ink); border-color: var(--line-strong); }
+.date-nav .icon-btn.xs { width: 24px; height: 24px; font-size: 12px; border: 0; }
 
 /* ---------- 카드 ---------- */
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--shadow-sm); }

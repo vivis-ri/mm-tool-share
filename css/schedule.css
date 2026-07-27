@@ -80,12 +80,14 @@
   display: flex; flex-direction: column; align-items: stretch; gap: 2px;
   font-size: 11px; line-height: 1.25;
   padding: 4px 7px;
-  border: 1px solid var(--sp-co-line, var(--line));
+  border: 1.5px solid var(--sp-co-line, var(--line));
+  border-left: 6px solid var(--sp-co-dot, var(--line));
   border-radius: 7px;
   background: var(--sp-co-bg, var(--surface));
   color: var(--ink);
   user-select: none;
 }
+.sp-chip .sp-chip-tx { font-weight: 700; }
 .sp-chip.draggable { cursor: grab; }
 .sp-chip.draggable:active { cursor: grabbing; }
 .sp-chip.dragging { opacity: .45; }

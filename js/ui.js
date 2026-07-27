@@ -29,14 +29,14 @@ window.UI = (function () {
     '인스타그램운영': '인스타그램 운영'
   };
   const COMPANY_TONES = [
-    { bg: '#fff4e6', line: '#f2b66c', dot: '#fa8619' },
-    { bg: '#eef6ff', line: '#9fc7ea', dot: '#4f9bd7' },
-    { bg: '#edf7ef', line: '#9bcda8', dot: '#3e9a57' },
-    { bg: '#fff0f3', line: '#e7a3b1', dot: '#d95b76' },
-    { bg: '#f2f0ff', line: '#bab1e8', dot: '#7465c8' },
-    { bg: '#eff7f7', line: '#91c9c8', dot: '#2f9694' },
-    { bg: '#fff8d7', line: '#e3c55d', dot: '#c79a12' },
-    { bg: '#f0f3f6', line: '#aeb8c2', dot: '#6f7f8d' }
+    { bg: '#ffd6ac', line: '#f2892a', dot: '#ef6c00' }, // 주황
+    { bg: '#bcd8ff', line: '#4f97e6', dot: '#1565d8' }, // 파랑
+    { bg: '#aee5be', line: '#3fb268', dot: '#0f8a42' }, // 초록
+    { bg: '#ffbdd2', line: '#ec6f97', dot: '#d81b60' }, // 분홍
+    { bg: '#d2beff', line: '#9575e6', dot: '#6a3fd4' }, // 보라
+    { bg: '#a9e5e0', line: '#3fbcb5', dot: '#0b8a83' }, // 청록
+    { bg: '#f3d97f', line: '#cfa81f', dot: '#a67c07' }, // 골드
+    { bg: '#c0c7f5', line: '#7784e3', dot: '#3949c4' }  // 남색
   ];
 
   function statusClass(s) { return STATUS_CLASS[s] || 'plan'; }
