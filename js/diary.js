@@ -31,6 +31,7 @@ window.Diary = (function () {
     const routines = await DB.list('routines', { person: state.person });
     const checks = await DB.list('task_checks', { person: state.person });
     const companies = (await DB.list('companies')).filter(c => !(window.Companies && window.Companies.isHidden(c)));
+    UI.setCompanyColors(companies);
     const companyIds = new Set(companies.map(c => String(c.id)));
     const services = (await DB.list('services')).filter(s => companyIds.has(String(s.company_id)));
     const serviceIds = new Set(services.map(s => String(s.id)));

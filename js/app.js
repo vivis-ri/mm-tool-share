@@ -49,6 +49,7 @@
     const companies = (await window.DB.list('companies'))
       .filter(c => !(window.Companies && window.Companies.isHidden(c)))
       .sort(window.Companies ? window.Companies.sortByQuoteDate : undefined);
+    UI.setCompanyColors(companies);
 
     const services = await window.DB.list('services');
     const serviceCompany = {};

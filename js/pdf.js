@@ -212,6 +212,7 @@ window.PDF = (function () {
   // 업체 + 서비스 항목 + 프로세스 단계 한 번에 로드(숨김 업체 제외, 견적일순 정렬)
   async function loadAll() {
     const companies = (await DB.list('companies')).filter(c => !isHiddenCompany(c)).sort(sortByQuoteDate);
+    UI.setCompanyColors(companies);
     const templates = await DB.list('service_templates');
     const services = (await DB.list('services')).sort(UI.serviceSorter(templates));
     const processes = await DB.list('processes');

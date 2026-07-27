@@ -71,6 +71,7 @@ window.SchedulePlan = (function () {
 
   async function loadData() {
     const companiesAll = (await DB.list('companies')).filter(c => !isHidden(c));
+    UI.setCompanyColors(companiesAll);
     const companies = companiesAll
       .filter(isActiveCompany)
       .sort(window.Companies ? window.Companies.sortByQuoteDate : undefined);

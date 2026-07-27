@@ -141,6 +141,7 @@ window.Companies = (function () {
     }
 
     const companies = (await DB.list('companies')).sort(sortByQuoteDate);
+    UI.setCompanyColors(companies);
     const serviceTemplates = await DB.list('service_templates');
     const serviceSorter = UI.serviceSorter(serviceTemplates);
     const services = (await DB.list('services')).sort(serviceSorter);
@@ -548,6 +549,7 @@ window.Companies = (function () {
 
   async function openCalendarPdfPicker() {
     const companies = (await DB.list('companies')).filter(c => !isHidden(c)).sort(sortByQuoteDate);
+    UI.setCompanyColors(companies);
     modal({
       title: '업체 달력 PDF',
       wide: true,
@@ -712,6 +714,21 @@ window.Companies = (function () {
   // ---------- 업체 추가/수정 모달 ----------
   function editCompany(root, c) {
     const isNew = !c;
+    const _tones = UI.companyTones;
+    const _curColor = c && c.color != null && c.color !== '' ? c.color : '';
+    const _isHex = typeof _curColor === 'string' && _curColor[0] === '#';
+    const _curIdx = (!_isHex && _curColor !== '') ? String(_curColor) : '';
+    const colorFieldHTML = `
+        <div class="field">
+          <label>업체 색상 <span class="help-text" style="font-weight:400;">달력·목록에서 이 업체를 구분하는 색 · 자동 = 업체마다 자동 배정</span></label>
+          <div class="color-pick" id="f-color" data-val="${esc(String(_curColor))}">
+            <button type="button" class="csw csw-auto${_curColor === '' ? ' on' : ''}" data-val="">자동</button>
+            ${_tones.map((t, i) => `<button type="button" class="csw${String(i) === _curIdx ? ' on' : ''}" data-val="${i}" style="background:${t.dot}" title="색 ${i + 1}"></button>`).join('')}
+            <label class="csw csw-custom${_isHex ? ' on' : ''}" title="직접 색상 선택">
+              <input type="color" id="f-color-custom" value="${_isHex ? esc(_curColor) : '#ef6c00'}">
+            </label>
+          </div>
+        </div>`;
     modal({
       title: isNew ? '새 업체 추가' : '업체 정보 수정',
       wide: true,
@@ -726,16 +743,35 @@ window.Companies = (function () {
           <div class="field"><label>내부 담당자</label><input class="input" id="f-mgr" value="${c ? esc(c.manager) : ''}"></div>
           <div class="field"><label>진행단계</label><select class="select" id="f-status">${UI.statusOptions(c ? c.status : '예정')}</select></div>
         </div>
-        <div class="field"><label>비고</label><textarea class="input" id="f-memo">${c ? esc(c.memo) : ''}</textarea></div>`,
+        <div class="field"><label>비고</label><textarea class="input" id="f-memo">${c ? esc(c.memo) : ''}</textarea></div>
+        ${colorFieldHTML}`,
       saveLabel: isNew ? '추가' : '저장',
+      onOpen: (m) => {
+        const wrap = m.querySelector('#f-color');
+        const custom = m.querySelector('#f-color-custom');
+        const customBtn = m.querySelector('.csw-custom');
+        const paint = () => {
+          wrap.querySelectorAll('.csw').forEach(b => b.classList.remove('on'));
+          const val = wrap.dataset.val || '';
+          if (val && val[0] === '#') { customBtn.classList.add('on'); custom.value = val; }
+          else { const sel = wrap.querySelector('.csw[data-val="' + val + '"]'); if (sel) sel.classList.add('on'); }
+        };
+        wrap.querySelectorAll('.csw[data-val]').forEach(b =>
+          b.addEventListener('click', () => { wrap.dataset.val = b.getAttribute('data-val'); paint(); }));
+        customBtn.addEventListener('click', () => { wrap.dataset.val = custom.value; paint(); });
+        custom.addEventListener('input', () => { wrap.dataset.val = custom.value; paint(); });
+        paint();
+      },
       onSave: async (m) => {
         const v = id => m.querySelector(id).value;
         const name = v('#f-name').trim();
         if (!name) { toast('업체명을 입력하세요'); return false; }
+        const cp = m.querySelector('#f-color').dataset.val;
+        const color = (cp == null || cp === '') ? null : (cp[0] === '#' ? cp.toLowerCase() : Number(cp));
         const payload = {
           name, rep_name: v('#f-rep').trim(), item: v('#f-item').trim(), contact: v('#f-contact').trim(),
           first_quote_date: v('#f-date') || null, total_quote: Number(v('#f-quote')) || 0,
-          manager: v('#f-mgr').trim(), status: v('#f-status'), memo: v('#f-memo').trim()
+          manager: v('#f-mgr').trim(), status: v('#f-status'), memo: v('#f-memo').trim(), color
         };
         if (isNew) {
           const cnt = (await DB.list('companies')).length;

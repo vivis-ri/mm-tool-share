@@ -39,14 +39,50 @@ window.UI = (function () {
     { bg: '#c0c7f5', line: '#7784e3', dot: '#3949c4' }  // 남색
   ];
 
+  // 업체별 수동 색상 저장소: id -> tone{bg,line,dot}. 없으면 id 해시로 자동배정.
+  const companyColorOverrides = {};
+  function clampHex(h) {
+    const m = /^#?([0-9a-fA-F]{6})$/.exec(String(h || '').trim());
+    return m ? '#' + m[1].toLowerCase() : null;
+  }
+  function mixWhite(hex, ratio) {
+    const n = parseInt(hex.slice(1), 16);
+    const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    const mr = Math.round(r + (255 - r) * ratio);
+    const mg = Math.round(g + (255 - g) * ratio);
+    const mb = Math.round(b + (255 - b) * ratio);
+    return '#' + ((1 << 24) + (mr << 16) + (mg << 8) + mb).toString(16).slice(1);
+  }
+  function hexToTone(hex) {
+    const dot = clampHex(hex);
+    return dot ? { dot, line: mixWhite(dot, 0.42), bg: mixWhite(dot, 0.80) } : null;
+  }
+  // 업체 레코드의 color 필드로 수동색 등록. color: 0~7(프리셋) | '#rrggbb'(직접) | null/''(자동)
+  function setCompanyColors(list) {
+    (list || []).forEach(c => {
+      if (!c || c.id == null) return;
+      const key = String(c.id), v = c.color;
+      if (v == null || v === '') { delete companyColorOverrides[key]; return; }
+      if (typeof v === 'string' && v[0] === '#') {
+        const t = hexToTone(v);
+        if (t) companyColorOverrides[key] = t; else delete companyColorOverrides[key];
+        return;
+      }
+      const idx = Number(v);
+      if (Number.isInteger(idx) && COMPANY_TONES[idx]) companyColorOverrides[key] = COMPANY_TONES[idx];
+      else delete companyColorOverrides[key];
+    });
+  }
+
   function statusClass(s) { return STATUS_CLASS[s] || 'plan'; }
   function badge(status) {
     return `<span class="badge ${statusClass(status)}">${esc(status || '예정')}</span>`;
   }
   function companyTone(id) {
-    const text = String(id || '');
+    const key = String(id || '');
+    if (companyColorOverrides[key]) return companyColorOverrides[key];
     let n = 0;
-    for (let i = 0; i < text.length; i++) n = ((n << 5) - n + text.charCodeAt(i)) | 0;
+    for (let i = 0; i < key.length; i++) n = ((n << 5) - n + key.charCodeAt(i)) | 0;
     return COMPANY_TONES[Math.abs(n) % COMPANY_TONES.length];
   }
   function companyStyle(id) {
@@ -265,7 +301,7 @@ window.UI = (function () {
 
   return {
     STATUSES, STATUS_CLASS, SERVICE_ORDER, MANUAL_SERVICE_ORDER_BASE,
-    statusClass, badge, companyTone, companyStyle, companyDotStyle,
+    statusClass, badge, companyTone, companyStyle, companyDotStyle, setCompanyColors, companyTones: COMPANY_TONES,
     esc, money, moneyShort, fmtDate, statusOptions, toast, modal, confirm: confirmModal, statusPicker,
     vatParts, moneyVatText, moneyVatHTML,
     serviceKey, defaultServiceOrder, hasManualServiceOrder, sortServiceTemplates, serviceSorter

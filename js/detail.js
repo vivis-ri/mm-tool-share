@@ -8,6 +8,7 @@ window.Detail = (function () {
 
   async function render(root, companyId, back) {
     const companies = (await DB.list('companies')).sort(window.Companies.sortByQuoteDate);
+    UI.setCompanyColors(companies);
     const c = companies.find(x => String(x.id) === String(companyId));
     if (!c) { back(); return; }
     const hidden = window.Companies.isHidden(c);
