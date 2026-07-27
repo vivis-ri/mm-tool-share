@@ -43,7 +43,6 @@
     const routines = await DB.list('routines', { person });
     const checks = await DB.list('task_checks', { person });
     const companies = (await DB.list('companies')).filter(c => !isHiddenCompany(c)).sort(sortByQuoteDate);
-    UI.setCompanyColors(companies);
     const companyIds = new Set(companies.map(c => String(c.id)));
     const services = (await DB.list('services')).filter(s => companyIds.has(String(s.company_id)));
     const serviceIds = new Set(services.map(s => String(s.id)));
