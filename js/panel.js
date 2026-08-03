@@ -10,6 +10,9 @@
   let cache = null;
   let selMonthDate = null;   // 월간에서 선택한 날짜(ymd)
   let expandedCo = null;     // 업체 탭에서 펼친 회사 id
+  let weekOffset = 0;        // 주간 탭 이동(주 단위, 0=이번 주)
+  let monthOffset = 0;       // 월간 탭 이동(월 단위, 0=이번 달)
+  let focusAdd = false;      // 렌더 후 할 일 입력칸에 포커스 복귀
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
   function statusClass(s) { return ({ '예정': 'plan', '진행중': 'run', '일시정지': 'pause', '종료': 'done', '지연': 'late' })[s] || 'plan'; }
@@ -93,13 +96,17 @@
       const items = itemsFor(today, data);
       const prog = progressOf(items);
       content.innerHTML = panelProgress(prog) + (items.length ? items.map(taskRow).join('')
-        : `<div class="p-empty">오늘 할 일이 없어요 🎉</div>`);
+        : `<div class="p-empty">오늘 할 일이 없어요 🎉</div>`)
+        + addComposer(S.ymd(today));
       bindChecks(content, S.ymd(today), data);
+      bindAdd(content);
     }
     else if (tab === 'week') {
-      heading.textContent = '이번 주';
-      const days = S.weekDates(today);
-      content.innerHTML = days.map(d => {
+      const weekAnchor = S.addDays(today, weekOffset * 7);
+      const days = S.weekDates(weekAnchor);
+      const wl = `${days[0].getMonth() + 1}.${days[0].getDate()} ~ ${days[6].getMonth() + 1}.${days[6].getDate()}`;
+      heading.textContent = weekOffset === 0 ? '이번 주' : '주간';
+      content.innerHTML = navHeader(wl, weekOffset) + days.map(d => {
         const items = itemsFor(d, data);
         const prog = progressOf(items);
         const hol = S.holidayName(d);
@@ -110,21 +117,25 @@
         </div>`;
       }).join('');
       bindChecks(content, null, data);
+      bindNav(content);
     }
     else if (tab === 'month') {
-      heading.textContent = '월간';
-      const y = today.getFullYear(), m = today.getMonth();
+      heading.textContent = monthOffset === 0 ? '이번 달' : '월간';
+      const base = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
+      const y = base.getFullYear(), m = base.getMonth();
       const first = new Date(y, m, 1), pad = first.getDay();
       const dim = new Date(y, m + 1, 0).getDate();
       const cells = [];
       for (let i = 0; i < pad; i++) cells.push(null);
       for (let d = 1; d <= dim; d++) cells.push(new Date(y, m, d));
-      // 선택 날짜가 이번 달이 아니면 오늘로
+      // 선택 날짜가 표시 중인 달에 없으면: 이 달에 '오늘'이 있으면 오늘, 없으면 1일
       let selKey = selMonthDate;
-      if (!selKey || !cells.some(d => d && S.ymd(d) === selKey)) selKey = S.ymd(today);
+      if (!selKey || !cells.some(d => d && S.ymd(d) === selKey)) {
+        selKey = cells.some(d => d && S.isToday(d)) ? S.ymd(today) : S.ymd(first);
+      }
       selMonthDate = selKey;
-      content.innerHTML = `<div class="p-month-t">${y}. ${m + 1}</div>
-        <div class="p-month">
+      content.innerHTML = navHeader(`${y}. ${m + 1}`, monthOffset) +
+        `<div class="p-month">
           ${DOW.map(d => `<span class="p-mh">${d}</span>`).join('')}
           ${cells.map(d => {
             if (!d) return '<span class="p-mc empty"></span>';
@@ -144,6 +155,7 @@
       renderMonthDetail(selKey, data);
       content.querySelectorAll('.p-mc[data-date]').forEach(cell =>
         cell.addEventListener('click', () => { selMonthDate = cell.dataset.date; render(); }));
+      bindNav(content);
     }
     else if (tab === 'co') {
       heading.textContent = '프로젝트 현황';
@@ -189,6 +201,13 @@
       <div class="foot-stat pause"><b>${pause}</b><span>정지</span></div>
       <div class="foot-stat late"><b>${late}</b><span>지연</span></div>
       <div class="foot-stat done"><b>${done}</b><span>종료</span></div>`;
+
+    // 방금 추가했다면 입력칸에 포커스 복귀 → 연속 입력 편하게
+    if (focusAdd) {
+      focusAdd = false;
+      const inp = content.querySelector('.p-add-in');
+      if (inp) inp.focus();
+    }
   }
 
   function panelProgress(p) {
@@ -196,6 +215,53 @@
     return `<div class="p-progress ${p.done === p.total ? 'full' : ''}">
       <span style="width:${p.pct}%"></span><b>${p.pct}%</b>
     </div>`;
+  }
+
+  // 주/월 이동 네비게이션 (‹ 이전 · 오늘 · 다음 ›)
+  function navHeader(label, offset) {
+    return `<div class="p-nav">
+      <button class="p-nav-btn" data-nav="prev" type="button" title="이전">‹</button>
+      <span class="p-nav-label">${esc(label)}</span>
+      <button class="p-nav-btn" data-nav="next" type="button" title="다음">›</button>
+      <button class="p-nav-today ${offset === 0 ? 'hide' : ''}" data-nav="today" type="button">오늘</button>
+    </div>`;
+  }
+  function bindNav(container) {
+    container.querySelectorAll('[data-nav]').forEach(b => b.addEventListener('click', () => {
+      const dir = b.dataset.nav;
+      const step = dir === 'prev' ? -1 : dir === 'next' ? 1 : 0;
+      if (tab === 'week') weekOffset = dir === 'today' ? 0 : weekOffset + step;
+      else if (tab === 'month') { monthOffset = dir === 'today' ? 0 : monthOffset + step; selMonthDate = null; }
+      render();
+    }));
+  }
+
+  // 할 일 추가 입력줄 (읽기전용이면 표시 안 함)
+  function addComposer(dateKey) {
+    if (DB.READONLY) return '';
+    return `<form class="p-add" data-date="${esc(dateKey)}">
+      <input type="text" class="p-add-in" placeholder="+ 할 일 추가" autocomplete="off">
+      <button type="submit" class="p-add-btn" title="추가">추가</button>
+    </form>`;
+  }
+  async function addOneoff(dateKey, title) {
+    if (DB.READONLY || !title) return;
+    const existing = (await DB.list('task_checks'))
+      .filter(ch => !ch.routine_id && !ch.deadline_key && ch.date === dateKey).length;
+    await DB.insert('task_checks', { routine_id: null, person, title, date: dateKey, done: false, sort_order: 500 + existing + 1 });
+  }
+  function bindAdd(container) {
+    container.querySelectorAll('.p-add').forEach(f => {
+      f.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const inp = f.querySelector('.p-add-in');
+        const val = (inp.value || '').trim();
+        if (!val) { inp.focus(); return; }
+        focusAdd = true;
+        await addOneoff(f.dataset.date, val);
+        cache = null; render();
+      });
+    });
   }
 
   // 월간 — 선택한 날짜의 업무일지 리스트
@@ -211,8 +277,10 @@
       <div class="p-md-h"><b>${d.getMonth() + 1}.${d.getDate()}</b> <span>${DOW[d.getDay()]}</span>${hol ? `<em>${esc(hol)}</em>` : ''}</div>
       ${items.length
         ? panelProgress(prog) + items.map(taskRow).join('')
-        : `<div class="p-none">이 날은 등록된 업무가 없어요</div>`}`;
+        : `<div class="p-none">이 날은 등록된 업무가 없어요</div>`}
+      ${addComposer(dateKey)}`;
     bindChecks(box, dateKey, data);
+    bindAdd(box);
   }
 
   // 업체 — 펼쳤을 때 서비스 항목별 단계 상세
@@ -299,7 +367,11 @@
     }
   }
 
-  document.querySelectorAll('.ptab').forEach(b => b.addEventListener('click', () => { tab = b.dataset.tab; render(); }));
+  document.querySelectorAll('.ptab').forEach(b => b.addEventListener('click', () => {
+    tab = b.dataset.tab;
+    weekOffset = 0; monthOffset = 0; selMonthDate = null;   // 탭 바꾸면 항상 이번 주/달·오늘 기준으로
+    render();
+  }));
   document.getElementById('p-close').addEventListener('click', () => window.mm && window.mm.closePanel());
   document.getElementById('p-open').addEventListener('click', () => window.mm && window.mm.openMain());
   document.getElementById('p-refresh').addEventListener('click', () => { cache = null; render(); });

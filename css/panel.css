@@ -53,6 +53,37 @@ html, body { height: 100%; background: transparent; }
 .p-progress b { position: absolute; inset: 0; display: grid; place-items: center; font-size: 9px; font-weight: 800; color: var(--ink-70); line-height: 1; }
 .p-progress.full b { color: var(--st-done); }
 
+/* 할 일 추가 입력줄 */
+.p-add { display: flex; gap: 6px; align-items: center; margin: 6px 2px 10px; }
+.p-add-in {
+  flex: 1; min-width: 0; height: 32px; padding: 0 11px;
+  border: 1px solid rgba(0,0,0,.10); border-radius: 9px;
+  background: rgba(255,255,255,.7); font-family: inherit; font-size: 12.5px; color: var(--ink);
+  transition: border-color .12s, box-shadow .12s;
+}
+.p-add-in::placeholder { color: var(--ink-45); }
+.p-add-in:focus { outline: none; border-color: var(--orange); box-shadow: 0 0 0 2px rgba(250,134,25,.16); }
+.p-add-btn {
+  flex: 0 0 auto; height: 32px; padding: 0 13px; border-radius: 9px;
+  background: var(--orange); color: #fff; font-size: 12px; font-weight: 700; transition: background .12s;
+}
+.p-add-btn:hover { background: var(--orange-deep); }
+
+/* 주/월 이동 네비게이션 */
+.p-nav { display: flex; align-items: center; gap: 4px; padding: 2px 2px 8px; }
+.p-nav-btn {
+  width: 26px; height: 26px; border-radius: 8px; flex: none;
+  font-size: 17px; line-height: 1; color: var(--ink-70); background: rgba(0,0,0,.04); transition: all .12s;
+}
+.p-nav-btn:hover { background: rgba(0,0,0,.08); color: var(--ink); }
+.p-nav-label { flex: 1; text-align: center; font-size: 12.5px; font-weight: 700; }
+.p-nav-today {
+  flex: none; height: 26px; padding: 0 10px; border-radius: 8px;
+  font-size: 11px; font-weight: 700; color: var(--orange-deep); background: var(--st-run-bg); transition: all .12s;
+}
+.p-nav-today:hover { background: var(--orange); color: #fff; }
+.p-nav-today.hide { visibility: hidden; }
+
 /* 주간 */
 .p-day { padding: 6px 4px 8px; border-bottom: 1px solid rgba(0,0,0,.05); }
 .p-day.today .p-day-h b { color: var(--orange-deep); }
