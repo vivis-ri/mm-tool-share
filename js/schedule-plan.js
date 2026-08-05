@@ -1,7 +1,7 @@
 // ============================================================
 //  schedule-plan.js — 프로젝트 일정 조율(월간)
-//  · 진행 중인 업체의 "마감일 미정" 프로세스 단계를 달력에 드래그&드롭 → end_date 설정
-//  · 배치된 마감일 카드를 다른 날짜로 드래그 → 시작일~마감일 기간 설정
+//  · 진행 중인 업체의 "마감일 미정" 프로세스 단계를 달력에 드래그&드롭 → end_date(마감일) 설정
+//  · 배치된 마감일 카드를 다른 날짜로 드래그 → 마감일만 변경(시작일 개념 없음)
 //  · 배치 즉시 업체현황 / 업무일지 🚩 / PDF 진행보드에 자동 반영
 //  · 개인 체크리스트(업무일지)와 분리 — 여기선 프로세스 단계만 다룸
 // ============================================================
@@ -10,7 +10,7 @@ window.SchedulePlan = (function () {
   const S = window.Schedule;
   const DOW = S.DOW;
   const state = { anchor: S.startToday(), companyFilters: [], searchTerm: '', searchExact: false, collapsedSvcs: {} };
-  let dragging = null; // { id, fromDate|null, startDate, endDate }
+  let dragging = null; // { id, fromDate|null }
   let searchTimer = null;
 
   function isHidden(c) { return window.Companies && window.Companies.isHidden(c); }
@@ -21,19 +21,13 @@ window.SchedulePlan = (function () {
     return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : '';
   }
   function chipScheduleText(p, place) {
-    const start = dateValue(p.start_date);
     const end = dateValue(p.end_date);
-    if (start && end && start !== end) return `시작 ${UI.fmtDate(start)} · 마감 ${UI.fmtDate(end)}`;
-    if (place === 'pool' && start) return `시작 ${UI.fmtDate(start)}`;
-    if (place === 'cal' && start && !end) return `시작 ${UI.fmtDate(start)}`;
+    if (place === 'cal' && end) return `마감 ${UI.fmtDate(end)}`;
     return '';
   }
   function fullSchedText(p) {
-    const s = dateValue(p.start_date), e = dateValue(p.end_date);
-    if (s && e && s !== e) return `${UI.fmtDate(s)} ~ ${UI.fmtDate(e)}`;
-    if (e) return `마감 ${UI.fmtDate(e)}`;
-    if (s) return `시작 ${UI.fmtDate(s)}`;
-    return '아직 미정';
+    const e = dateValue(p.end_date);
+    return e ? `마감 ${UI.fmtDate(e)}` : '아직 미정';
   }
   function chipTip(p) {
     const lines = [
@@ -47,25 +41,10 @@ window.SchedulePlan = (function () {
     if (p.memo) lines.push(`메모 · ${p.memo}`);
     return lines.join('\n');
   }
-  function rangePatch(drag, targetDate) {
-    if (!drag.fromDate) return { end_date: targetDate };
-    const from = dateValue(drag.fromDate);
-    const start = dateValue(drag.startDate) || from;
-    const end = dateValue(drag.endDate) || from;
-    if (!start || !end) return { end_date: targetDate };
-    if (!drag.startDate || start === end) {
-      return targetDate < from
-        ? { start_date: targetDate, end_date: from }
-        : { start_date: from, end_date: targetDate };
-    }
-    if (targetDate < start) return { start_date: targetDate, end_date: end };
-    if (targetDate > end) return { start_date: start, end_date: targetDate };
-    return { start_date: start, end_date: targetDate };
+  function datePatch(targetDate) {
+    return { end_date: targetDate };
   }
-  function rangeToast(patch) {
-    if (patch.start_date && patch.end_date && patch.start_date !== patch.end_date) {
-      return `기간을 ${patch.start_date} ~ ${patch.end_date}로 설정했습니다`;
-    }
+  function dateToast(patch) {
     return `마감일을 ${patch.end_date}로 설정했습니다`;
   }
 
@@ -185,7 +164,7 @@ window.SchedulePlan = (function () {
       ? `<span class="sp-chip-sched">${sched.split(' · ').map(x => `<i>${esc(x)}</i>`).join('')}</span>`
       : '';
     return `<div class="sp-chip st-${stClass(p.status)} ${DB.READONLY ? '' : 'draggable'}"
-        draggable="${DB.READONLY ? 'false' : 'true'}" data-pid="${p.id}" data-place="${place}" data-start="${esc(dateValue(p.start_date))}" data-end="${esc(dateValue(p.end_date))}" style="${UI.companyStyle(p._companyId)}" data-tip="${esc(chipTip(p))}">
+        draggable="${DB.READONLY ? 'false' : 'true'}" data-pid="${p.id}" data-place="${place}" data-end="${esc(dateValue(p.end_date))}" style="${UI.companyStyle(p._companyId)}" data-tip="${esc(chipTip(p))}">
         <span class="sp-chip-main"><span class="sp-chip-dot"></span><span class="sp-chip-tx">${label}</span></span>
         ${schedHTML}</div>`;
   }
@@ -427,9 +406,9 @@ window.SchedulePlan = (function () {
       committing = true;
       try {
         if (dt.kind === 'date' && drag.fromDate !== dt.date) {
-          const patch = rangePatch(drag, dt.date);
+          const patch = datePatch(dt.date);
           await DB.update('processes', drag.id, patch);
-          toast(rangeToast(patch));
+          toast(dateToast(patch));
           await render(root);
         } else if (dt.kind === 'pool' && drag.fromDate) {
           await DB.update('processes', drag.id, { end_date: '' });
@@ -444,9 +423,7 @@ window.SchedulePlan = (function () {
         const cell = chip.closest('.sp-cell');
         dragging = {
           id: chip.dataset.pid,
-          fromDate: cell ? cell.dataset.date : null,
-          startDate: chip.dataset.start || '',
-          endDate: chip.dataset.end || ''
+          fromDate: cell ? cell.dataset.date : null
         };
         dropTarget = null;
         chip.classList.add('dragging');

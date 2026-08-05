@@ -116,7 +116,7 @@ window.Detail = (function () {
     const cls = statusClass(p.status);
     const sched = p.end_date
       ? `🚩 ${UI.fmtDate(p.end_date)}`
-      : (p.start_date ? UI.fmtDate(p.start_date) : '일정 미정');
+      : '일정 미정';
     return `
       <div class="stage-card st-${cls} only-clickable" data-pid="${p.id}" data-id="${p.id}">
         <div class="stage-idx" data-drag-handle title="드래그해서 순서 변경">${i + 1}</div>
@@ -306,9 +306,8 @@ window.Detail = (function () {
         <div class="grid-2">
           <div class="field"><label>담당자 <span class="muted">(추후 지정)</span></label><input class="input" id="p-asg" value="${p ? esc(p.assignee) : ''}"></div>
           <div class="field"><label>상태</label><select class="select" id="p-status">${UI.statusOptions(p ? p.status : '예정')}</select></div>
-          <div class="field"><label>시작일</label><input class="input" id="p-start" type="date" value="${p ? (p.start_date || '') : ''}"></div>
-          <div class="field"><label>🚩 마감일 <span class="muted">(업무일지 연동)</span></label><input class="input" id="p-end" type="date" value="${p ? (p.end_date || '') : ''}"></div>
         </div>
+        <div class="field"><label>🚩 마감일 <span class="muted">(업무일지 연동)</span></label><input class="input" id="p-end" type="date" value="${p ? (p.end_date || '') : ''}"></div>
         <div class="field"><label>메모</label><textarea class="input" id="p-memo">${p ? esc(p.memo) : ''}</textarea></div>`,
       saveLabel: isNew ? '추가' : '저장',
       onSave: async (m) => {
@@ -316,7 +315,7 @@ window.Detail = (function () {
         if (!name) { toast('단계명을 입력하세요'); return false; }
         const payload = {
           name, assignee: m.querySelector('#p-asg').value.trim(),
-          start_date: m.querySelector('#p-start').value || null,
+          start_date: null,
           end_date: m.querySelector('#p-end').value || null,
           status: m.querySelector('#p-status').value,
           memo: m.querySelector('#p-memo').value.trim()

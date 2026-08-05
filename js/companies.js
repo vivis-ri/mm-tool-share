@@ -92,13 +92,12 @@ window.Companies = (function () {
   }
 
   function processTouchesMonth(p, start, end) {
-    if (inRange(p.start_date, start, end) || inRange(p.end_date, start, end)) return true;
-    const sd = parseDate(p.start_date);
+    if (inRange(p.end_date, start, end)) return true;
     const ed = parseDate(p.end_date);
     const running = ACTIVE_STATUSES.includes(p.status);
     if (!running) return false;
-    if (sd && sd < end && (!ed || ed >= start)) return true;
-    return !sd && !ed;
+    // 진행 중인데 마감일이 아직 없으면(미정) 매월 노출
+    return !ed;
   }
 
   function companyTouchesMonth(c, procs) {
@@ -697,7 +696,7 @@ window.Companies = (function () {
           service_id: svc.id,
           name: p.name || '',
           assignee: p.assignee || '',
-          start_date: p.start_date || null,
+          start_date: null,
           end_date: p.end_date || null,
           status: p.status || '예정',
           memo: p.memo || '',

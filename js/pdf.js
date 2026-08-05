@@ -120,12 +120,7 @@ window.PDF = (function () {
     return String(a.first_quote_date || '9999-99-99').localeCompare(String(b.first_quote_date || '9999-99-99'));
   }
   function scheduleText(p) {
-    const start = p && p.start_date ? fmtDate(p.start_date) : '';
-    const end = p && p.end_date ? fmtDate(p.end_date) : '';
-    if (start && end && start !== end) return `${start} ~ ${end}`;
-    if (end) return end;
-    if (start) return start;
-    return '-';
+    return (p && p.end_date) ? fmtDate(p.end_date) : '-';
   }
   function assigneeText(p) {
     return (p && p.assignee) ? p.assignee : '-';

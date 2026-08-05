@@ -215,15 +215,15 @@
       { id: 'sv_4', company_id: 'co_2', template_id: 'st_shoot', name: '촬영', category: '디자인', amount: 1500000, status: '예정', sort_order: 2 }
     ];
     const processes = [
-      { id: 'pr_1', service_id: 'sv_1', name: '컨설팅', assignee: '', start_date: '2026-05-03', end_date: '2026-05-05', status: '종료', memo: '', sort_order: 1 },
-      { id: 'pr_2', service_id: 'sv_1', name: '네이밍/로고', assignee: '', start_date: '2026-05-06', end_date: '2026-05-15', status: '종료', memo: '', sort_order: 2 },
-      { id: 'pr_3', service_id: 'sv_1', name: '가이드 전달', assignee: '', start_date: '2026-05-16', end_date: '2026-05-18', status: '종료', memo: '', sort_order: 3 },
-      { id: 'pr_4', service_id: 'sv_2', name: '상세페이지', assignee: '', start_date: '2026-05-20', end_date: '2026-06-02', status: '진행중', memo: '초안 검토중', sort_order: 1 },
-      { id: 'pr_5', service_id: 'sv_2', name: '오픈예정', assignee: '', start_date: '2026-06-03', end_date: '2026-06-10', status: '예정', memo: '', sort_order: 2 },
-      { id: 'pr_6', service_id: 'sv_2', name: '펀딩 오픈', assignee: '', start_date: '2026-06-11', end_date: '', status: '예정', memo: '', sort_order: 3 },
-      { id: 'pr_7', service_id: 'sv_3', name: '구조 설계', assignee: '', start_date: '2026-04-20', end_date: '2026-04-28', status: '종료', memo: '', sort_order: 1 },
-      { id: 'pr_8', service_id: 'sv_3', name: '디자인', assignee: '', start_date: '2026-04-29', end_date: '2026-05-20', status: '진행중', memo: '', sort_order: 2 },
-      { id: 'pr_9', service_id: 'sv_4', name: '기획/콘티', assignee: '', start_date: '', end_date: '', status: '예정', memo: '일정 미정', sort_order: 1 }
+      { id: 'pr_1', service_id: 'sv_1', name: '컨설팅', assignee: '', start_date: null, end_date: '2026-05-05', status: '종료', memo: '', sort_order: 1 },
+      { id: 'pr_2', service_id: 'sv_1', name: '네이밍/로고', assignee: '', start_date: null, end_date: '2026-05-15', status: '종료', memo: '', sort_order: 2 },
+      { id: 'pr_3', service_id: 'sv_1', name: '가이드 전달', assignee: '', start_date: null, end_date: '2026-05-18', status: '종료', memo: '', sort_order: 3 },
+      { id: 'pr_4', service_id: 'sv_2', name: '상세페이지', assignee: '', start_date: null, end_date: '2026-06-02', status: '진행중', memo: '초안 검토중', sort_order: 1 },
+      { id: 'pr_5', service_id: 'sv_2', name: '오픈예정', assignee: '', start_date: null, end_date: '2026-06-10', status: '예정', memo: '', sort_order: 2 },
+      { id: 'pr_6', service_id: 'sv_2', name: '펀딩 오픈', assignee: '', start_date: null, end_date: '', status: '예정', memo: '', sort_order: 3 },
+      { id: 'pr_7', service_id: 'sv_3', name: '구조 설계', assignee: '', start_date: null, end_date: '2026-04-28', status: '종료', memo: '', sort_order: 1 },
+      { id: 'pr_8', service_id: 'sv_3', name: '디자인', assignee: '', start_date: null, end_date: '2026-05-20', status: '진행중', memo: '', sort_order: 2 },
+      { id: 'pr_9', service_id: 'sv_4', name: '기획/콘티', assignee: '', start_date: null, end_date: '', status: '예정', memo: '일정 미정', sort_order: 1 }
     ];
 
     // 반복업무 + 오늘 체크 샘플

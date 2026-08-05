@@ -106,5 +106,16 @@
     window.App.refresh();
   });
 
-  window.DB.init().then(() => { refreshSidebar(); switchView('diary'); });
+  // 프로세스 '시작일' 기능 제거 → 기존 데이터에 남아 있는 start_date 정리(있을 때만, 자동 1회)
+  async function purgeStartDates() {
+    if (window.DB.READONLY) return;
+    try {
+      const dirty = (await window.DB.list('processes')).filter(p => p.start_date);
+      for (const p of dirty) await window.DB.update('processes', p.id, { start_date: null });
+    } catch (e) { console.error(e); }
+  }
+
+  window.DB.init()
+    .then(purgeStartDates)
+    .then(() => { refreshSidebar(); switchView('diary'); });
 })();
