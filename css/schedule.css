@@ -488,3 +488,61 @@
   .sp-cell { min-height: 96px; padding: 5px; border-radius: 8px; }
   .sp-cell-items { min-height: 30px; }
 }
+
+/* ============================================================
+   우클릭 컨텍스트 메뉴 — 칩에서 진행상태 변경 · 마감일 삭제
+   ============================================================ */
+.sp-ctx {
+  position: fixed;
+  z-index: 100;
+  min-width: 224px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  padding: 6px;
+  animation: pop .14s ease;
+}
+.sp-ctx-head {
+  padding: 6px 8px 8px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 6px;
+}
+.sp-ctx-co { font-size: 11px; font-weight: 700; color: var(--ink-45); }
+.sp-ctx-title {
+  font-size: 13px; font-weight: 800; color: var(--ink);
+  margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sp-ctx-label {
+  font-size: 10.5px; font-weight: 800; letter-spacing: .02em;
+  color: var(--ink-45); text-transform: uppercase;
+  padding: 2px 8px 6px;
+}
+.sp-ctx-stats { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 4px 2px; }
+.sp-ctx-stat {
+  padding: 4px; border-radius: 8px; border: 1px solid transparent;
+  transition: background .1s, border-color .1s;
+}
+.sp-ctx-stat:hover { background: var(--surface-2); }
+.sp-ctx-stat.on { background: var(--orange-soft); border-color: var(--orange); }
+.sp-ctx-div { height: 1px; background: var(--line); margin: 6px 4px; }
+.sp-ctx-item {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 8px 10px; border-radius: 8px;
+  font-size: 13px; font-weight: 700; color: var(--ink);
+  transition: background .1s;
+}
+.sp-ctx-item:hover { background: var(--surface-2); }
+.sp-ctx-item.danger { color: var(--st-late); }
+.sp-ctx-item.danger:hover { background: rgba(214,69,69,.10); }
+.sp-ctx-ic { font-size: 14px; }
+.sp-ctx-sub { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--ink-45); }
+.sp-ctx-note {
+  padding: 6px 10px 4px; font-size: 11.5px; color: var(--ink-45);
+}
+.sp-ctx-modal-head {
+  margin: -4px 0 12px; padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px; font-weight: 800; color: var(--ink);
+}

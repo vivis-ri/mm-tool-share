@@ -128,6 +128,11 @@ window.SchedulePlan = (function () {
   async function render(root) {
     if (window.App && window.App.refreshSidebar) window.App.refreshSidebar();
     const data = await loadData();
+    // 우클릭 메뉴에서 칩 정보를 즉시 찾기 위한 id→레코드 인덱스
+    const idx = {};
+    Object.values(data.scheduledByDate).forEach(arr => arr.forEach(p => { idx[String(p.id)] = p; }));
+    Object.values(data.byCo).forEach(co => Object.values(co.svcs).forEach(sv => sv.items.forEach(p => { idx[String(p.id)] = p; })));
+    state._chipIndex = idx;
     const y = state.anchor.getFullYear(), m = state.anchor.getMonth();
 
     root.innerHTML = `
@@ -334,6 +339,7 @@ window.SchedulePlan = (function () {
 
     if (DB.READONLY) return;
     bindDnD(root);
+    bindContextMenu(root);
   }
 
   // 잘리는 텍스트(칩·업체탭·서비스명)에 마우스를 올리면 전체 상세를 보여주는 툴팁
@@ -387,6 +393,128 @@ window.SchedulePlan = (function () {
     });
     root.addEventListener('mouseleave', hide);
     window.addEventListener('scroll', hide, true);
+  }
+
+  // ---------- 우클릭 컨텍스트 메뉴 (진행상태 변경 · 마감일 삭제) ----------
+  let ctxEl = null;
+  function closeCtxMenu() {
+    if (ctxEl) { ctxEl.remove(); ctxEl = null; }
+    document.removeEventListener('mousedown', onCtxDoc, true);
+    document.removeEventListener('contextmenu', onCtxDoc, true);
+    document.removeEventListener('keydown', onCtxKey, true);
+    window.removeEventListener('scroll', closeCtxMenu, true);
+  }
+  function onCtxDoc(e) { if (ctxEl && !ctxEl.contains(e.target)) closeCtxMenu(); }
+  function onCtxKey(e) { if (e.key === 'Escape') closeCtxMenu(); }
+
+  function openCtxMenu(root, p, x, y) {
+    closeCtxMenu();
+    const cur = p.status || '예정';
+    const hasEnd = !!dateValue(p.end_date);
+    const menu = document.createElement('div');
+    menu.className = 'sp-ctx';
+    menu.innerHTML = `
+      <div class="sp-ctx-head">
+        <div class="sp-ctx-co">${esc(p._company || '')}</div>
+        <div class="sp-ctx-title">${esc(p._service || '항목')} · ${esc(p.name || '')}</div>
+      </div>
+      <div class="sp-ctx-label">진행상태 변경</div>
+      <div class="sp-ctx-stats">
+        ${UI.STATUSES.map(s => `<button class="sp-ctx-stat ${s === cur ? 'on' : ''}" type="button" data-status="${esc(s)}"><span class="badge ${stClass(s)}">${esc(s)}</span></button>`).join('')}
+      </div>
+      <div class="sp-ctx-div"></div>
+      <button class="sp-ctx-item" type="button" data-act="assignee"><span class="sp-ctx-ic">👤</span>담당자 지정 <span class="sp-ctx-sub">${p.assignee ? esc(p.assignee) : '미지정'}</span></button>
+      <button class="sp-ctx-item" type="button" data-act="memo"><span class="sp-ctx-ic">💬</span>메모 편집 <span class="sp-ctx-sub">${p.memo ? '작성됨' : '없음'}</span></button>
+      ${hasEnd
+        ? `<div class="sp-ctx-div"></div>
+      <button class="sp-ctx-item danger" type="button" data-act="clear-end"><span class="sp-ctx-ic">🗓</span>마감일 삭제 <span class="sp-ctx-sub">미정으로</span></button>`
+        : ''}
+    `;
+    document.body.appendChild(menu);
+    ctxEl = menu;
+
+    // 뷰포트 밖으로 잘리지 않게 좌우/상하 보정
+    const margin = 8;
+    const r = menu.getBoundingClientRect();
+    let left = x, top = y;
+    if (left + r.width + margin > window.innerWidth) left = window.innerWidth - r.width - margin;
+    if (top + r.height + margin > window.innerHeight) top = window.innerHeight - r.height - margin;
+    menu.style.left = Math.max(margin, left) + 'px';
+    menu.style.top = Math.max(margin, top) + 'px';
+
+    menu.querySelectorAll('.sp-ctx-stat').forEach(b => b.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const s = b.dataset.status;
+      closeCtxMenu();
+      if (s === cur) return;
+      await DB.update('processes', p.id, { status: s });
+      toast(`진행상태를 ‘${s}’(으)로 변경했습니다`);
+      await render(root);
+    }));
+    const clearBtn = menu.querySelector('[data-act="clear-end"]');
+    if (clearBtn) clearBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      closeCtxMenu();
+      await DB.update('processes', p.id, { end_date: '' });
+      toast('마감일을 삭제했습니다 (미정)');
+      await render(root);
+    });
+
+    const asgBtn = menu.querySelector('[data-act="assignee"]');
+    if (asgBtn) asgBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeCtxMenu();
+      UI.modal({
+        title: '담당자 지정',
+        bodyHTML: `
+          <div class="sp-ctx-modal-head">${esc(p._service || '항목')} · ${esc(p.name || '')}</div>
+          <div class="field"><label>담당자</label><input class="input" id="sp-asg-input" value="${esc(p.assignee || '')}" placeholder="담당자 이름 (비우면 미지정)" autocomplete="off"></div>`,
+        saveLabel: '저장',
+        onSave: async (m) => {
+          const v = m.querySelector('#sp-asg-input').value.trim();
+          await DB.update('processes', p.id, { assignee: v });
+          toast(v ? `담당자를 '${v}'(으)로 지정했습니다` : '담당자를 미지정으로 변경했습니다');
+          await render(root);
+        }
+      });
+    });
+
+    const memoBtn = menu.querySelector('[data-act="memo"]');
+    if (memoBtn) memoBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeCtxMenu();
+      UI.modal({
+        title: '메모 편집',
+        bodyHTML: `
+          <div class="sp-ctx-modal-head">${esc(p._service || '항목')} · ${esc(p.name || '')}</div>
+          <div class="field"><label>메모</label><textarea class="input" id="sp-memo-input" rows="4" placeholder="메모를 입력하세요 (비우면 삭제)">${esc(p.memo || '')}</textarea></div>`,
+        saveLabel: '저장',
+        onSave: async (m) => {
+          const v = m.querySelector('#sp-memo-input').value.trim();
+          await DB.update('processes', p.id, { memo: v });
+          toast(v ? '메모를 저장했습니다' : '메모를 삭제했습니다');
+          await render(root);
+        }
+      });
+    });
+
+    setTimeout(() => {
+      document.addEventListener('mousedown', onCtxDoc, true);
+      document.addEventListener('contextmenu', onCtxDoc, true);
+      document.addEventListener('keydown', onCtxKey, true);
+      window.addEventListener('scroll', closeCtxMenu, true);
+    }, 0);
+  }
+
+  function bindContextMenu(root) {
+    root.querySelectorAll('.sp-chip').forEach(chip => {
+      chip.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        const p = state._chipIndex && state._chipIndex[String(chip.dataset.pid)];
+        if (!p) return;
+        openCtxMenu(root, p, e.clientX, e.clientY);
+      });
+    });
   }
 
   function bindDnD(root) {
