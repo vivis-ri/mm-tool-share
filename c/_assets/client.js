@@ -11,9 +11,10 @@
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
   let D = null;                 // 복호화된 데이터
-  let schedTab = 'list';        // 일정 탭
-  let calAnchor = new Date();   // 달력 기준월
+  let calAnchor = new Date();   // 달력 기준월(부팅 시 일정이 있는 달로 맞춘다)
   let dlvFilter = '';           // 작업물 카테고리 필터
+  let reqOpen = false;          // 요청사항 전체 펼침
+  let reqTab = 'todo';          // 요청사항 탭(접수 전 / 접수 완료)
 
   // ---------- 날짜 ----------
   const DOW = ['일', '월', '화', '수', '목', '금', '토'];
@@ -118,7 +119,21 @@
         '담당자에게 새 링크를 요청해 주세요.');
     }
     document.title = (D.company && D.company.name ? D.company.name + ' · ' : '') + '프로젝트 현황';
+    calAnchor = bestCalendarMonth();
     render();
+  }
+
+  // 달력 첫 화면 — 이번 달이 비어 있으면 일정이 실제로 있는 달로 맞춰 연다.
+  // (안 그러면 지난 일정만 있는 프로젝트에서 빈 달력이 보인다)
+  function bestCalendarMonth() {
+    const rows = scheduleRows();
+    if (!rows.length) return new Date();
+    const mk = (s) => { const d = parseYmd(s); return new Date(d.getFullYear(), d.getMonth(), 1); };
+    const thisMonth = ymd(new Date()).slice(0, 7);
+    if (rows.some(r => String(r.end_date).slice(0, 7) === thisMonth)) return new Date();
+    const upcoming = rows.filter(r => r.d >= 0);
+    if (upcoming.length) return mk(upcoming[0].end_date);          // 가장 가까운 앞날
+    return mk(rows[rows.length - 1].end_date);                     // 없으면 가장 최근 일정
   }
 
   // ============================================================
@@ -161,8 +176,9 @@
       header(c) +
       `<main class="wrap">` +
         progressSection() +
+        managerBar(c) +
         requestsSection() +
-        widgetsSection(c) +
+        widgetsSection() +
         noteSection(c) +
         scheduleSection() +
         deliveriesSection() +
@@ -253,68 +269,104 @@
       </div>`;
   }
 
-  // ---------- 3. 요청사항 ----------
+  // ---------- 담당자 (진행현황 바로 아래, 한 줄) ----------
+  function managerBar(c) {
+    const m = (c && c.manager) || null;
+    if (!m || !m.name) return '';
+    const tel = String(m.contact || '').replace(/[^0-9+]/g, '');
+    return `
+      <div class="mgr-bar">
+        <div class="mgr-av">${esc(String(m.name).slice(0, 1))}</div>
+        <div class="mgr-main">
+          <span class="mgr-n">${esc(m.name)} <em>담당</em></span>
+          <span class="mgr-c">엠엠컨설팅연구소</span>
+        </div>
+        ${m.contact ? `<a class="mgr-ic" href="tel:${esc(tel)}" title="${esc(m.contact)}">📞 ${esc(m.contact)}</a>` : ''}
+        ${m.email ? `<a class="mgr-ic ghost" href="mailto:${esc(m.email)}" title="${esc(m.email)}">✉</a>` : ''}
+      </div>`;
+  }
+
+  // ---------- 3. 요청사항 (중요만 먼저 · 펼치면 접수 전/완료 탭) ----------
+  const isImportant = (r) => !!r.important;
+
   function requestsSection() {
-    const rows = [...(D.requests || [])].sort((a, b) =>
-      a.done === b.done ? (a.sort_order || 0) - (b.sort_order || 0) : (a.done ? 1 : -1));
+    const rows = D.requests || [];
     if (!rows.length) return '';
-    const done = rows.filter(r => r.done).length;
-    const pct = Math.round(done / rows.length * 100);
+    const done = rows.filter(r => r.done);
+    const todo = rows.filter(r => !r.done);
+    const pct = Math.round(done.length / rows.length * 100);
+
+    const bySort = (a, b) => (a.sort_order || 0) - (b.sort_order || 0);
+    // 접힘 상태: 중요 표시된 미완료 항목. 없으면 미완료 앞쪽 3건.
+    const important = todo.filter(isImportant).sort(bySort);
+    const brief = important.length ? important : todo.slice().sort(bySort).slice(0, 3);
+    const hidden = rows.length - brief.length;
+
+    const list = (arr) => arr.length
+      ? `<ul class="reqs">${arr.map(reqItem).join('')}</ul>`
+      : `<p class="none">해당 항목이 없습니다.</p>`;
+
     return `
       <section class="sec">
-        <div class="sec-h">
-          <h2>요청사항</h2>
-          <span class="cnt">${done} / ${rows.length}</span>
+        <button class="req-head ${reqOpen ? 'open' : ''}" id="req-toggle" aria-expanded="${reqOpen}">
+          <div class="prog-row">
+            <h2>요청사항</h2>
+            <span class="prog-pct sm">${done.length}<i>/${rows.length}</i></span>
+          </div>
+          <div class="bar sm"><span style="width:${pct}%"></span></div>
+          <div class="prog-sub">
+            <span>${important.length ? `중요 ${important.length}건 먼저 보기` : `남은 요청 ${todo.length}건`}</span>
+            <span class="more">${reqOpen ? '접기' : `전체 보기${hidden > 0 ? ` (+${hidden})` : ''}`} <i class="caret">▾</i></span>
+          </div>
+        </button>
+
+        ${reqOpen ? '' : list(brief)}
+
+        <div class="req-body" ${reqOpen ? '' : 'hidden'}>
+          <div class="tabs sm">
+            <button class="tab ${reqTab === 'todo' ? 'on' : ''}" data-rtab="todo">접수 전 ${todo.length}</button>
+            <button class="tab ${reqTab === 'done' ? 'on' : ''}" data-rtab="done">접수 완료 ${done.length}</button>
+          </div>
+          ${list((reqTab === 'done' ? done : todo).slice().sort((a, b) => {
+            if (reqTab === 'todo' && isImportant(a) !== isImportant(b)) return isImportant(a) ? -1 : 1;
+            return bySort(a, b);
+          }))}
         </div>
-        <div class="bar sm"><span style="width:${pct}%"></span></div>
-        <p class="sec-sub">아래 자료를 담당자에게 전달해 주세요. 접수되면 자동으로 체크됩니다.</p>
-        <ul class="reqs">
-          ${rows.map(r => `
-            <li class="req ${r.done ? 'done' : ''}">
-              <span class="req-box">${r.done ? '✓' : ''}</span>
-              <div class="req-main">
-                <span class="req-t">${esc(r.title)}</span>
-                ${r.memo ? `<span class="req-m">${esc(r.memo)}</span>` : ''}
-              </div>
-              ${r.due_date ? `<span class="req-due">~${esc(fmtShort(r.due_date))}</span>` : ''}
-            </li>`).join('')}
-        </ul>
+
+        <p class="sec-sub">확인하거나 전달해 주실 항목입니다. 자료 전달, 시안 확인, 표시사항 검토 등이 포함되며 처리되면 자동으로 체크됩니다.</p>
       </section>`;
   }
 
-  // ---------- 4. 위젯 (D-day · 담당자) ----------
-  function widgetsSection(c) {
+  function reqItem(r) {
+    return `
+      <li class="req ${r.done ? 'done' : ''} ${isImportant(r) && !r.done ? 'imp' : ''}">
+        <span class="req-box">${r.done ? '✓' : ''}</span>
+        <div class="req-main">
+          <span class="req-t">${isImportant(r) && !r.done ? '<i class="req-star">★</i>' : ''}${esc(r.title)}</span>
+          ${r.memo ? `<span class="req-m">${esc(r.memo)}</span>` : ''}
+        </div>
+        ${r.due_date ? `<span class="req-due">~${esc(fmtShort(r.due_date))}</span>` : ''}
+      </li>`;
+  }
+
+  // ---------- 4. 위젯 (다가오는 주요일정) ----------
+  function widgetsSection() {
     const ms = milestones(3);
-    const mgr = c.manager || {};
+    if (!ms.length) return '';
     return `
       <div class="widgets">
         <div class="w">
           <h3>다가오는 주요일정</h3>
-          ${ms.length ? `
-            <ul class="dd-list">
-              ${ms.map(p => `
-                <li>
-                  <b class="dd-num ${p.d <= 3 ? 'soon' : ''}">${ddayText(p.d)}</b>
-                  <div class="dd-main">
-                    <span class="dd-n">${esc(p.name)}</span>
-                    <span class="dd-s">${esc(svcName(p.service_id))} · ${esc(fmtDate(p.end_date))}</span>
-                  </div>
-                </li>`).join('')}
-            </ul>` : `<p class="none">예정된 주요일정이 없습니다.</p>`}
-        </div>
-        <div class="w">
-          <h3>담당자</h3>
-          ${mgr.name ? `
-            <div class="mgr">
-              <div class="mgr-av">${esc(String(mgr.name).slice(0, 1))}</div>
-              <div class="mgr-main">
-                <span class="mgr-n">${esc(mgr.name)}</span>
-                <span class="mgr-c">엠엠컨설팅연구소</span>
-              </div>
-            </div>
-            ${mgr.contact ? `<a class="mgr-btn" href="tel:${esc(String(mgr.contact).replace(/[^0-9+]/g, ''))}">📞 ${esc(mgr.contact)}</a>` : ''}
-            ${mgr.email ? `<a class="mgr-btn ghost" href="mailto:${esc(mgr.email)}">✉ ${esc(mgr.email)}</a>` : ''}
-          ` : `<p class="none">담당자 정보가 없습니다.</p>`}
+          <ul class="dd-list">
+            ${ms.map(p => `
+              <li>
+                <b class="dd-num ${p.d <= 3 ? 'soon' : ''}">${ddayText(p.d)}</b>
+                <div class="dd-main">
+                  <span class="dd-n">${esc(p.name)}</span>
+                  <span class="dd-s">${esc(svcName(p.service_id))} · ${esc(fmtDate(p.end_date))}</span>
+                </div>
+              </li>`).join('')}
+          </ul>
         </div>
       </div>`;
   }
@@ -325,63 +377,18 @@
     return `<section class="note"><span class="note-ic">📌</span><div>${esc(c.client_note).replace(/\n/g, '<br>')}</div></section>`;
   }
 
-  // ---------- 6. 일정 (리스트 · 표 · 달력) ----------
+  // ---------- 6. 일정 (달력) ----------
   function scheduleSection() {
+    const undated = (D.processes || []).filter(p => !p.end_date && p.status !== '종료').length;
     return `
       <section class="sec">
         <div class="sec-h"><h2>일정</h2></div>
-        <div class="tabs">
-          <button class="tab ${schedTab === 'list' ? 'on' : ''}" data-stab="list">리스트</button>
-          <button class="tab ${schedTab === 'table' ? 'on' : ''}" data-stab="table">표</button>
-          <button class="tab ${schedTab === 'cal' ? 'on' : ''}" data-stab="cal">달력</button>
-        </div>
         <div id="sch-body">${schedBody()}</div>
+        ${undated ? `<p class="sec-sub">아직 날짜가 정해지지 않은 단계 ${undated}건은 위 <b>진행 현황</b>에서 확인하실 수 있습니다.</p>` : ''}
       </section>`;
   }
 
-  function schedBody() {
-    if (schedTab === 'table') return schedTable();
-    if (schedTab === 'cal') return schedCal();
-    return schedList();
-  }
-
-  function schedList() {
-    const rows = scheduleRows();
-    if (!rows.length) return `<p class="none">잡힌 일정이 없습니다.</p>`;
-    const upcoming = rows.filter(r => r.d >= 0 || r.status !== '종료');
-    const list = upcoming.length ? upcoming : rows;
-    return `<ul class="sch-list">
-      ${list.map(r => `
-        <li class="sch ${r.status === '종료' ? 'done' : ''} ${r.d < 0 && r.status !== '종료' ? 'over' : ''}">
-          <div class="sch-d">
-            <b>${esc(fmtShort(r.end_date))}</b>
-            <span>${esc(DOW[(parseYmd(r.end_date) || new Date()).getDay()])}</span>
-          </div>
-          <div class="sch-main">
-            <span class="sch-n">${r.milestone ? '⭐ ' : ''}${esc(r.name)}</span>
-            <span class="sch-s">${esc(r.service)}</span>
-          </div>
-          <span class="sch-dd ${r.d <= 3 && r.d >= 0 ? 'soon' : ''}">${r.status === '종료' ? '완료' : ddayText(r.d)}</span>
-          ${badge(r.status)}
-        </li>`).join('')}
-    </ul>`;
-  }
-
-  function schedTable() {
-    const rows = scheduleRows();
-    if (!rows.length) return `<p class="none">잡힌 일정이 없습니다.</p>`;
-    return `<div class="tbl-wrap"><table class="tbl">
-      <thead><tr><th>마감일</th><th>항목</th><th>단계</th><th>상태</th></tr></thead>
-      <tbody>
-        ${rows.map(r => `<tr class="${r.status === '종료' ? 'done' : ''}">
-          <td class="nw">${esc(fmtShort(r.end_date))}</td>
-          <td>${esc(r.service)}</td>
-          <td>${r.milestone ? '⭐ ' : ''}${esc(r.name)}</td>
-          <td class="nw">${badge(r.status)}</td>
-        </tr>`).join('')}
-      </tbody>
-    </table></div>`;
-  }
+  function schedBody() { return schedCal(); }
 
   function schedCal() {
     const y = calAnchor.getFullYear(), mo = calAnchor.getMonth();
@@ -495,12 +502,18 @@
       tgl.classList.toggle('open', open);
     });
 
-    document.querySelectorAll('[data-stab]').forEach(b => b.addEventListener('click', () => {
-      schedTab = b.dataset.stab;
-      document.querySelectorAll('[data-stab]').forEach(x => x.classList.toggle('on', x === b));
-      document.getElementById('sch-body').innerHTML = schedBody();
-      bindSched();
+    // 요청사항 — 전체 펼치기 / 접수 전·완료 탭
+    document.getElementById('req-toggle')?.addEventListener('click', () => {
+      reqOpen = !reqOpen;
+      render();
+      document.querySelector('#req-toggle')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    });
+    document.querySelectorAll('[data-rtab]').forEach(b => b.addEventListener('click', () => {
+      reqTab = b.dataset.rtab;
+      render();
+      document.querySelector('#req-toggle')?.scrollIntoView({ block: 'start' });
     }));
+
     bindSched();
 
     document.querySelectorAll('[data-cat]').forEach(b => b.addEventListener('click', () => {

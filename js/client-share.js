@@ -245,7 +245,12 @@ window.ClientShare = (function () {
   }
 
   function requestsSection(c, rows) {
-    const sorted = [...rows].sort((a, b) => (a.done === b.done ? (a.sort_order || 0) - (b.sort_order || 0) : (a.done ? 1 : -1)));
+    // 미완료 → 완료 순, 미완료 안에서는 ★ 중요가 위로
+    const sorted = [...rows].sort((a, b) => {
+      if (!!a.done !== !!b.done) return a.done ? 1 : -1;
+      if (!a.done && !!a.important !== !!b.important) return a.important ? -1 : 1;
+      return (a.sort_order || 0) - (b.sort_order || 0);
+    });
     const done = rows.filter(r => r.done).length;
     const pct = rows.length ? Math.round(done / rows.length * 100) : 0;
     return `
@@ -277,6 +282,7 @@ window.ClientShare = (function () {
         </div>
         ${r.due_date ? `<span class="req-due">~${esc(UI.fmtDate(r.due_date))}</span>` : ''}
         <span class="req-tools only-edit">
+          <button class="icon-btn xs ${r.important ? 'on' : ''}" data-req-star title="${r.important ? '중요 — 클라이언트 화면에 먼저 보입니다' : '중요로 표시'}">${r.important ? '★' : '☆'}</button>
           <button class="icon-btn xs" data-req-eye title="${r.client_visible === false ? '클라이언트에게 숨김' : '클라이언트에게 보임'}">${r.client_visible === false ? '🙈' : '👁'}</button>
           <button class="icon-btn xs" data-req-edit>✎</button>
           <button class="icon-btn xs" data-req-del>✕</button>
@@ -376,6 +382,11 @@ window.ClientShare = (function () {
         await DB.update('requests', id, { done: e.target.checked });
         rerender();
       });
+      rowEl.querySelector('[data-req-star]')?.addEventListener('click', async () => {
+        const r = (await DB.list('requests', { id }))[0];
+        await DB.update('requests', id, { important: !r.important });
+        rerender();
+      });
       rowEl.querySelector('[data-req-eye]')?.addEventListener('click', async () => {
         const r = (await DB.list('requests', { id }))[0];
         await DB.update('requests', id, { client_visible: r.client_visible === false });
@@ -461,14 +472,17 @@ window.ClientShare = (function () {
         <div class="field"><label>안내 문구 <span class="muted">(클라이언트에게 함께 보입니다)</span></label>
           <input class="input" id="rq-memo" placeholder="예: 사본 가능, 최근 3개월 이내" value="${r ? esc(r.memo || '') : ''}"></div>
         <div class="field"><label>기한 <span class="muted">(선택)</span></label>
-          <input class="input" id="rq-due" type="date" value="${r ? (r.due_date || '') : ''}"></div>`,
+          <input class="input" id="rq-due" type="date" value="${r ? (r.due_date || '') : ''}"></div>
+        <label class="chk"><input type="checkbox" id="rq-imp" ${r && r.important ? 'checked' : ''}>
+          <span>★ 중요 <em>클라이언트 화면에서 접지 않고 먼저 보입니다</em></span></label>`,
       saveLabel: isNew ? '추가' : '저장',
       onSave: async (m) => {
         const title = m.querySelector('#rq-title').value.trim();
         if (!title) { toast('요청 내용을 입력하세요'); return false; }
         const payload = {
           title, memo: m.querySelector('#rq-memo').value.trim(),
-          due_date: m.querySelector('#rq-due').value || null
+          due_date: m.querySelector('#rq-due').value || null,
+          important: m.querySelector('#rq-imp').checked
         };
         if (isNew) {
           const cnt = (await DB.list('requests', { company_id: c.id })).length;

@@ -228,3 +228,7 @@ body.readonly .stage-card:hover { transform: none; box-shadow: none; }
 .dep-link + .dep-link { border-top: 1px solid var(--line); }
 .dep-co { flex: 1; min-width: 90px; font-size: 14px; font-weight: 700; }
 .dep-link a.btn { text-decoration: none; }
+
+/* 요청사항 ★ 중요 토글 */
+.icon-btn.xs.on { color: var(--orange); }
+.req-row .req-title { display: flex; align-items: center; gap: 5px; }
