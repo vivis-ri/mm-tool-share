@@ -83,6 +83,14 @@
       b.addEventListener('click', () => window.App.openCompany(b.dataset.id)));
   }
 
+  // 지금 배포 버튼(Electron 전용) — bat 없이 앱에서 바로 공유 페이지 갱신
+  const deployBtn = document.getElementById('btn-deploy');
+  if (window.mm && window.mm.deployShare) {
+    deployBtn.addEventListener('click', () => window.ClientShare.deployNow());
+  } else {
+    deployBtn.style.display = 'none';
+  }
+
   // 미니 패널 버튼(Electron 전용)
   const panelBtn = document.getElementById('btn-panel');
   if (window.mm && window.mm.isElectron) {

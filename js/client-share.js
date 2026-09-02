@@ -233,13 +233,13 @@ window.ClientShare = (function () {
         </div>
         ${on ? `
           <div class="cs-linkrow">
-            <input type="text" id="cs-url" readonly value="${esc(url)}" placeholder="공유-업데이트.bat 을 한 번 실행하면 주소가 만들어집니다">
+            <input type="text" id="cs-url" readonly value="${esc(url)}" placeholder="아래 '지금 배포'를 한 번 누르면 주소가 만들어집니다">
             <button class="btn sm ghost" data-cs-copy="url">링크 복사</button>
-            <button class="btn sm primary" data-cs-copy="kakao">📋 카톡 문구</button>
+            <button class="btn sm ghost" data-cs-copy="kakao">📋 카톡 문구</button>
+            <button class="btn sm primary" id="cs-deploy">🚀 지금 배포</button>
           </div>
           ${expired ? `<div class="cs-warn">만료일(${esc(c.share_expires_at)})이 지나 다음 배포부터 이 링크는 열리지 않습니다.</div>` : ''}
-          ${url ? '' : `<div class="cs-warn">아직 공유 주소가 없습니다. 프로젝트 폴더의 <code>공유-업데이트.bat</code> 을 한 번 실행해 주세요.</div>`}
-          <div class="cs-note">금액은 대시보드에 <b>포함되지 않습니다.</b> 링크를 아는 사람은 누구나 볼 수 있으니 단톡방·메일로만 전달하세요.</div>
+          <div class="cs-note">바꾼 내용은 <b>배포해야</b> 클라이언트 화면에 반영됩니다. 금액은 대시보드에 <b>포함되지 않으며</b>, 링크를 아는 사람은 누구나 볼 수 있으니 단톡방·메일로만 전달하세요.</div>
         ` : `<div class="cs-note">이 업체에 진행현황 페이지를 만들어 공유하려면 <b>⚙ 설정</b>에서 공유를 켜세요.</div>`}
       </div>`;
   }
@@ -346,6 +346,7 @@ window.ClientShare = (function () {
   function bind(root, c, rerender) {
     // ---- 공유 ----
     root.querySelector('#cs-settings')?.addEventListener('click', () => shareSettings(c, rerender));
+    root.querySelector('#cs-deploy')?.addEventListener('click', () => deployNow(rerender));
     root.querySelectorAll('[data-cs-copy]').forEach(b => b.addEventListener('click', async () => {
       const kind = b.dataset.csCopy;
       const url = clientUrl(c);
@@ -506,6 +507,75 @@ window.ClientShare = (function () {
     });
   }
 
+  // ---------- 지금 배포 ----------
+  // bat을 찾을 필요 없이 앱에서 바로 build-share.js + git push 를 돌린다.
+  function deployNow(after) {
+    if (!(window.mm && window.mm.deployShare)) {
+      toast('데스크톱 앱에서만 배포할 수 있습니다');
+      return;
+    }
+    const m = modal({
+      title: '🚀 공유 페이지 배포',
+      wide: true,
+      bodyHTML: `
+        <div class="dep-box" id="dep-box">
+          <div class="dep-spin"></div>
+          <div class="dep-msg">최신 데이터로 만들어 올리는 중…</div>
+          <div class="dep-sub">대표님 페이지와 클라이언트 대시보드를 함께 갱신합니다.<br>10~30초 걸립니다.</div>
+        </div>`,
+      saveLabel: '닫기',
+      onSave: () => { if (after) after(); }
+    });
+
+    window.mm.deployShare().then(async (res) => {
+      const box = m.el.querySelector('#dep-box');
+      if (!box) return;
+      if (!res || !res.ok) {
+        box.className = 'dep-box err';
+        box.innerHTML = `
+          <div class="dep-ic">⚠️</div>
+          <div class="dep-msg">${esc((res && res.msg) || '배포에 실패했습니다.')}</div>
+          ${res && res.detail ? `<pre class="dep-log">${esc(String(res.detail).slice(-1500))}</pre>` : ''}`;
+        return;
+      }
+      const shared = (await DB.list('companies')).filter(c => c.share_enabled && !isExpired(c) && clientUrl(c));
+      box.className = 'dep-box ok';
+      box.innerHTML = `
+        <div class="dep-ic">✅</div>
+        <div class="dep-msg">${esc(res.msg)}</div>
+        <div class="dep-sub">인터넷에 반영되기까지 1~2분 걸릴 수 있습니다.</div>
+        ${shared.length ? `
+          <div class="dep-links">
+            <div class="dep-links-t">클라이언트 링크 ${shared.length}개</div>
+            ${shared.map(c => `
+              <div class="dep-link">
+                <span class="dep-co">${esc(c.name)}</span>
+                <button class="btn sm ghost" data-dep-copy="${c.id}">링크 복사</button>
+                <button class="btn sm ghost" data-dep-kakao="${c.id}">카톡 문구</button>
+                <a class="btn sm ghost" href="${esc(clientUrl(c))}" target="_blank" rel="noopener">열기 ↗</a>
+              </div>`).join('')}
+          </div>` : `<div class="dep-sub">아직 공유를 켠 업체가 없습니다.</div>`}`;
+
+      box.querySelectorAll('[data-dep-copy]').forEach(b => b.addEventListener('click', async () => {
+        const co = shared.find(x => String(x.id) === b.dataset.depCopy);
+        const ok = await copy(clientUrl(co));
+        toast(ok ? '링크를 복사했습니다' : '복사 실패');
+      }));
+      box.querySelectorAll('[data-dep-kakao]').forEach(b => b.addEventListener('click', async () => {
+        const co = shared.find(x => String(x.id) === b.dataset.depKakao);
+        const ok = await copy(kakaoText(co));
+        toast(ok ? '카톡 문구를 복사했습니다' : '복사 실패');
+      }));
+    }).catch(err => {
+      const box = m.el.querySelector('#dep-box');
+      if (box) {
+        box.className = 'dep-box err';
+        box.innerHTML = `<div class="dep-ic">⚠️</div><div class="dep-msg">배포 중 오류가 났습니다.</div>
+          <pre class="dep-log">${esc(String(err && err.message || err))}</pre>`;
+      }
+    });
+  }
+
   // ---------- 중복 정리 ----------
   // 띄어쓰기·괄호만 다른 항목들을 묶어 보여주고, 남길 것 하나만 고르게 한다.
   async function dedupRequests(c, rerender) {
@@ -646,7 +716,7 @@ window.ClientShare = (function () {
 
   return {
     sectionsHTML, bind,
-    clientUrl, kakaoText, ensureShareKeys, isExpired,
+    clientUrl, kakaoText, ensureShareKeys, isExpired, deployNow,
     applyRequestSets, applyLicenseSets, applyDeliverySets,
     normTitle, isDelivered,
     CHANNELS, DIRECTIONS

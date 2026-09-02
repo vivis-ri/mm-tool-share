@@ -203,3 +203,28 @@ body.readonly .stage-card:hover { transform: none; box-shadow: none; }
 .dup-name { font-size: 13.5px; font-weight: 600; }
 .dup-tag { font-size: 10.5px; font-weight: 700; color: var(--st-done); background: var(--st-done-bg); border-radius: 6px; padding: 1px 7px; }
 .dup-memo { font-size: 11.5px; color: var(--ink-45); }
+
+/* 배포 진행/결과 */
+.dep-box { text-align: center; padding: 22px 10px 8px; }
+.dep-spin {
+  width: 34px; height: 34px; margin: 0 auto 16px;
+  border: 3px solid var(--line); border-top-color: var(--orange);
+  border-radius: 50%; animation: dep-rot .8s linear infinite;
+}
+@keyframes dep-rot { to { transform: rotate(360deg); } }
+.dep-ic { font-size: 30px; margin-bottom: 10px; }
+.dep-msg { font-size: 15.5px; font-weight: 700; }
+.dep-sub { font-size: 12.5px; color: var(--ink-45); margin-top: 7px; line-height: 1.6; }
+.dep-box.err .dep-msg { color: var(--st-late); }
+.dep-log {
+  margin-top: 14px; padding: 11px 13px; text-align: left;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 9px;
+  font-size: 11.5px; line-height: 1.6; color: var(--ink-70);
+  white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow: auto;
+}
+.dep-links { margin-top: 18px; text-align: left; border-top: 1px solid var(--line); padding-top: 14px; }
+.dep-links-t { font-size: 11.5px; font-weight: 800; color: var(--ink-45); margin-bottom: 8px; }
+.dep-link { display: flex; align-items: center; gap: 7px; padding: 8px 2px; flex-wrap: wrap; }
+.dep-link + .dep-link { border-top: 1px solid var(--line); }
+.dep-co { flex: 1; min-width: 90px; font-size: 14px; font-weight: 700; }
+.dep-link a.btn { text-decoration: none; }
