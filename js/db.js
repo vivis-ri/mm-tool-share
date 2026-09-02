@@ -18,7 +18,7 @@
     'companies', 'services', 'processes',
     'routines', 'task_checks',
     // 클라이언트 공유 대시보드용
-    'managers', 'delivery_categories', 'deliveries',
+    'managers', 'delivery_categories', 'delivery_templates', 'deliveries',
     'request_sets', 'request_templates', 'requests'
   ];
 
@@ -171,38 +171,76 @@
   // 최초 실행(seed)과 기존 사용자 마이그레이션(ensureMasters)이 함께 쓴다.
   // 내용은 어디까지나 출발점이며, 항목 설정 탭에서 자유롭게 고칠 수 있다.
   function masterDefaults() {
-    const cats = ['시안', '최종본', '인쇄용 원고', '촬영 원본', '보정본', '참고자료', '기타']
-      .map((name, i) => ({ id: 'dc_' + (i + 1), name, sort_order: i + 1 }));
+    // 작업물 묶음 — 단계가 있으면 업체에 한 번에 깔 수 있고, 없으면 단순 분류로만 쓴다.
+    const deliverySets = [
+      { name: '패키지', stages: ['컨셉제안서', '1차시안', '2차시안', '수정본', '최종시안', '인쇄가이드 및 인쇄용 파일'] },
+      { name: '로고', stages: ['컨셉제안서', '1차시안', '2차시안', '수정본', '최종시안', '로고가이드 및 로고파일'] },
+      { name: '상세페이지', stages: ['1차시안', '2차시안', '수정본', '최종시안', 'GIF 및 자른 이미지'] },
+      { name: '촬영 원본', stages: [] },
+      { name: '보정본', stages: [] },
+      { name: '참고자료', stages: [] },
+      { name: '기타', stages: [] }
+    ];
 
-    const setDefs = [
-      { id: 'rs_common', name: '계약 기본', kind: '공통', docs: [
+    // 필요서류 묶음
+    const requestSets = [
+      { name: '계약 기본', kind: '공통', docs: [
         '사업자등록증', '통장 사본', '대표자 신분증 사본'] },
-      { id: 'rs_lic_instant', name: '즉석판매제조가공업', kind: '인허가', docs: [
+      { name: '즉석판매제조가공업', kind: '인허가', docs: [
         '사업자등록증', '영업신고증', '위생교육 수료증', '건강진단결과서', '시설 배치도'] },
-      { id: 'rs_lic_manu', name: '식품제조가공업', kind: '인허가', docs: [
+      { name: '식품제조가공업', kind: '인허가', docs: [
         '사업자등록증', '영업등록증', '품목제조보고서', '자가품질검사 성적서', '시설 배치도'] },
-      { id: 'rs_lic_dist', name: '유통전문판매업', kind: '인허가', docs: [
+      { name: '유통전문판매업', kind: '인허가', docs: [
         '사업자등록증', '유통전문판매업 영업신고증', '통신판매업 신고증', '위탁생산(OEM) 계약서', '제조사 품목제조보고서'] },
-      { id: 'rs_wadiz', name: '와디즈 기본', kind: '서비스', docs: [
+      { name: '와디즈 기본', kind: '서비스', docs: [
         '로고 원본(AI/PNG)', '제품 상세 정보', '제품 실물 사진', '대표자 프로필', '인증서·시험성적서'] }
     ];
 
-    const request_sets = setDefs.map((s, i) => ({ id: s.id, name: s.name, kind: s.kind, sort_order: i + 1 }));
-    const request_templates = [];
-    setDefs.forEach(s => s.docs.forEach((name, i) =>
-      request_templates.push({ id: s.id + '_d' + (i + 1), set_id: s.id, name, memo: '', sort_order: i + 1 })));
-
-    return { delivery_categories: cats, request_sets, request_templates };
+    return { deliverySets, requestSets };
   }
 
-  // 기존 사용자 데이터에 새 마스터/테이블이 없으면 채워 넣는다(1회, 비어 있을 때만).
+  // 기존 사용자 데이터에 없는 마스터만 이름 기준으로 채워 넣는다.
+  // (이미 쓰고 있는 항목은 그대로 두고, 새로 추가된 기본 묶음만 들어온다)
   async function ensureMasters() {
     if (READONLY || SHARE) return;
     const md = masterDefaults();
-    for (const table of ['delivery_categories', 'request_sets', 'request_templates']) {
-      const rows = await window.DB.list(table);
-      if (rows.length) continue;
-      for (const row of md[table]) await window.DB.insert(table, row);
+
+    // --- 작업물 묶음 + 단계 ---
+    const cats = await window.DB.list('delivery_categories');
+    const catByName = {}; cats.forEach(c => { catByName[c.name] = c; });
+    let catOrder = cats.reduce((n, c) => Math.max(n, Number(c.sort_order) || 0), 0);
+    const dts = await window.DB.list('delivery_templates');
+    for (const set of md.deliverySets) {
+      let parent = catByName[set.name];
+      if (!parent) {
+        parent = await window.DB.insert('delivery_categories', { name: set.name, sort_order: ++catOrder });
+        catByName[set.name] = parent;
+      }
+      let i = 0;
+      for (const stage of set.stages) {
+        i++;
+        if (dts.some(x => String(x.category_id) === String(parent.id) && x.name === stage)) continue;
+        await window.DB.insert('delivery_templates', { category_id: parent.id, name: stage, sort_order: i });
+      }
+    }
+
+    // --- 필요서류 묶음 + 서류 ---
+    const sets = await window.DB.list('request_sets');
+    const setByName = {}; sets.forEach(s => { setByName[s.name] = s; });
+    let setOrder = sets.reduce((n, s) => Math.max(n, Number(s.sort_order) || 0), 0);
+    const rts = await window.DB.list('request_templates');
+    for (const set of md.requestSets) {
+      let parent = setByName[set.name];
+      if (!parent) {
+        parent = await window.DB.insert('request_sets', { name: set.name, kind: set.kind, sort_order: ++setOrder });
+        setByName[set.name] = parent;
+      }
+      let i = 0;
+      for (const doc of set.docs) {
+        i++;
+        if (rts.some(x => String(x.set_id) === String(parent.id) && x.name === doc)) continue;
+        await window.DB.insert('request_templates', { set_id: parent.id, name: doc, memo: '', sort_order: i });
+      }
     }
   }
 
@@ -276,13 +314,11 @@
       { id: 'rt_3', person: '나', title: '주간 보고 정리', recurrence: JSON.stringify({ type: 'weekly', days: [5] }), sort_order: 3 }
     ];
 
-    const md = masterDefaults();
+    // 마스터(담당자·작업물 묶음·필요서류 묶음)는 ensureMasters() 가 채운다 — 단일 출처 유지
     const out = {
       service_templates: st, process_templates: pt, companies, services, processes, routines, task_checks: [],
       managers: [], deliveries: [], requests: [],
-      delivery_categories: md.delivery_categories,
-      request_sets: md.request_sets,
-      request_templates: md.request_templates
+      delivery_categories: [], delivery_templates: [], request_sets: [], request_templates: []
     };
     return out;
   }

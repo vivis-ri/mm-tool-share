@@ -127,25 +127,66 @@ window.ClientShare = (function () {
   // ============================================================
   //  필요서류 묶음 → 요청사항 자동 생성
   // ============================================================
+  // 중복 판정용 정규화 — 띄어쓰기·괄호·기호 차이는 같은 것으로 본다.
+  //   "통장 사본" = "통장사본",  "(해당 시)품목제조보고서" = "품목제조보고서"
+  // 단어 자체가 다르면(예: "CS 전화번호" vs "소비자 상담 전화번호") 자동으로는 잡지 못한다.
+  function normTitle(s) {
+    return String(s || '')
+      .replace(/\([^)]*\)/g, '')
+      .replace(/\[[^\]]*\]/g, '')
+      .replace(/[\s·,.\/\-_~:;'"!?]/g, '')
+      .toLowerCase();
+  }
+
   // 같은 업체에 같은 이름의 요청이 이미 있으면 건너뛴다(여러 묶음에 겹치는 서류 대비).
   async function applyRequestSets(companyId, setIds, serviceId) {
     const ids = (setIds || []).filter(Boolean);
     if (!ids.length) return 0;
     const existing = await DB.list('requests', { company_id: companyId });
-    const have = new Set(existing.map(r => String(r.title || '').trim()));
+    const have = new Set(existing.map(r => normTitle(r.title)));
     let order = existing.length;
     let added = 0;
     for (const setId of ids) {
       const docs = await DB.list('request_templates', { set_id: setId });
       for (const d of docs) {
         const title = String(d.name || '').trim();
-        if (!title || have.has(title)) continue;
-        have.add(title);
+        const key = normTitle(title);
+        if (!key || have.has(key)) continue;
+        have.add(key);
         order++; added++;
         await DB.insert('requests', {
           company_id: companyId, service_id: serviceId || null,
           title, done: false, due_date: null, memo: d.memo || '',
           client_visible: true, sort_order: order
+        });
+      }
+    }
+    return added;
+  }
+
+  // 작업물 묶음(카테고리 안의 단계) → 예정 상태의 전달 기록으로 깔아둔다.
+  async function applyDeliverySets(companyId, catIds, serviceId) {
+    const ids = (catIds || []).filter(Boolean);
+    if (!ids.length) return 0;
+    const existing = await DB.list('deliveries', { company_id: companyId });
+    let order = existing.length;
+    let added = 0;
+    for (const catId of ids) {
+      const stages = await DB.list('delivery_templates', { category_id: catId });
+      const have = new Set(existing
+        .filter(d => String(d.category_id) === String(catId))
+        .map(d => normTitle(d.name)));
+      for (const s of stages) {
+        const name = String(s.name || '').trim();
+        const key = normTitle(name);
+        if (!key || have.has(key)) continue;
+        have.add(key);
+        order++; added++;
+        await DB.insert('deliveries', {
+          company_id: companyId, service_id: serviceId || null,
+          name, category_id: catId, channel: '', url: '',
+          direction: '전달', date: null, memo: '',
+          delivered: false, client_visible: true, sort_order: order
         });
       }
     }
@@ -214,6 +255,7 @@ window.ClientShare = (function () {
           <span class="muted">${rows.length ? `${done}/${rows.length} 완료 · ${pct}%` : '고객에게 요청할 자료·서류 목록'}</span>
         </div>
         <div class="head-actions only-edit">
+          ${dupGroups(rows).length ? `<button class="btn ghost" id="req-dedup">🧹 중복 정리 ${dupGroups(rows).length}</button>` : ''}
           <button class="btn ghost" id="req-import">📋 묶음에서 가져오기</button>
           <button class="btn primary" id="req-add">+ 요청 추가</button>
         </div>
@@ -242,33 +284,42 @@ window.ClientShare = (function () {
       </div>`;
   }
 
+  // 전달 완료 판정: delivered 플래그가 정본. 예전 데이터(플래그 없음)는 날짜가 있으면 완료로 본다.
+  const isDelivered = (d) => (d.delivered != null ? !!d.delivered : !!d.date);
+
   function deliveriesSection(c, rows, catName) {
-    const sorted = [...rows].sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+    const done = rows.filter(isDelivered).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+    const todo = rows.filter(d => !isDelivered(d)).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
     return `
       <div class="d-section-head">
         <div>
           <h3>📦 작업물 전달 기록</h3>
-          <span class="muted">${rows.length ? `${rows.length}건` : '작업물을 어떤 방법으로 주고받았는지 남겨둡니다'}</span>
+          <span class="muted">${rows.length ? `전달 ${done.length}건 · 예정 ${todo.length}건` : '작업물을 어떤 방법으로 주고받았는지 남겨둡니다'}</span>
         </div>
-        <button class="btn primary only-edit" id="dlv-add">+ 기록 추가</button>
+        <div class="head-actions only-edit">
+          <button class="btn ghost" id="dlv-import">📋 묶음에서 가져오기</button>
+          <button class="btn primary" id="dlv-add">+ 기록 추가</button>
+        </div>
       </div>
       <div class="dlv-list">
-        ${sorted.length ? sorted.map(d => dlvRow(d, catName)).join('')
-          : `<div class="empty sm"><p>전달 기록이 없습니다. 파일명과 전달 방법(카톡·드라이브 등)을 남기면 클라이언트도 같은 목록을 봅니다.</p></div>`}
+        ${done.map(d => dlvRow(d, catName)).join('')}
+        ${todo.length ? `<div class="dlv-sub">예정</div>${todo.map(d => dlvRow(d, catName)).join('')}` : ''}
+        ${rows.length ? '' : `<div class="empty sm"><p>전달 기록이 없습니다. <b>묶음에서 가져오기</b>로 시안 순서를 미리 깔아두거나, 파일명과 전달 방법을 바로 남길 수 있습니다.</p></div>`}
       </div>`;
   }
 
   function dlvRow(d, catName) {
     const dir = d.direction === '수령' ? 'in' : 'out';
+    const ok = isDelivered(d);
     return `
-      <div class="dlv-row card" data-id="${d.id}">
-        <span class="dlv-dir ${dir}">${d.direction === '수령' ? '수령' : '전달'}</span>
+      <div class="dlv-row card ${ok ? '' : 'todo'}" data-id="${d.id}">
+        <span class="dlv-dir ${ok ? dir : 'wait'}">${ok ? (d.direction === '수령' ? '수령' : '전달') : '예정'}</span>
         <div class="dlv-main">
           <div class="dlv-name">${esc(d.name)}${d.url ? ` <a class="dlv-link" href="${esc(d.url)}" target="_blank" rel="noopener" title="${esc(d.url)}">↗</a>` : ''}</div>
           ${d.memo ? `<div class="dlv-memo">${esc(d.memo)}</div>` : ''}
         </div>
         ${catName[d.category_id] ? `<span class="dlv-chip">${esc(catName[d.category_id])}</span>` : ''}
-        <span class="dlv-chip ch">${esc(d.channel || '기타')}</span>
+        ${ok ? `<span class="dlv-chip ch">${esc(d.channel || '기타')}</span>` : ''}
         <span class="dlv-date">${d.date ? esc(UI.fmtDate(d.date)) : '-'}</span>
         <span class="dlv-tools only-edit">
           <button class="icon-btn xs" data-dlv-eye title="${d.client_visible === false ? '클라이언트에게 숨김' : '클라이언트에게 보임'}">${d.client_visible === false ? '🙈' : '👁'}</button>
@@ -276,6 +327,17 @@ window.ClientShare = (function () {
           <button class="icon-btn xs" data-dlv-del>✕</button>
         </span>
       </div>`;
+  }
+
+  // 정규화 기준으로 같은 요청이 2건 이상인 그룹
+  function dupGroups(rows) {
+    const by = {};
+    (rows || []).forEach(r => {
+      const k = normTitle(r.title);
+      if (!k) return;
+      (by[k] = by[k] || []).push(r);
+    });
+    return Object.keys(by).filter(k => by[k].length > 1).map(k => by[k]);
   }
 
   // ============================================================
@@ -295,6 +357,7 @@ window.ClientShare = (function () {
     // ---- 요청사항 ----
     root.querySelector('#req-add')?.addEventListener('click', () => editRequest(c, rerender));
     root.querySelector('#req-import')?.addEventListener('click', () => importSets(c, rerender));
+    root.querySelector('#req-dedup')?.addEventListener('click', () => dedupRequests(c, rerender));
 
     const reqList = root.querySelector('[data-req-list]');
     if (reqList) DragSort.enable(reqList, {
@@ -327,6 +390,7 @@ window.ClientShare = (function () {
 
     // ---- 작업물 ----
     root.querySelector('#dlv-add')?.addEventListener('click', () => editDelivery(c, rerender));
+    root.querySelector('#dlv-import')?.addEventListener('click', () => importDeliverySets(c, rerender));
     root.querySelectorAll('.dlv-row').forEach(rowEl => {
       const id = rowEl.dataset.id;
       rowEl.querySelector('[data-dlv-eye]')?.addEventListener('click', async () => {
@@ -442,6 +506,77 @@ window.ClientShare = (function () {
     });
   }
 
+  // ---------- 중복 정리 ----------
+  // 띄어쓰기·괄호만 다른 항목들을 묶어 보여주고, 남길 것 하나만 고르게 한다.
+  async function dedupRequests(c, rerender) {
+    const rows = await DB.list('requests', { company_id: c.id });
+    const groups = dupGroups(rows);
+    if (!groups.length) { toast('중복된 요청사항이 없습니다'); return; }
+    modal({
+      title: '요청사항 중복 정리',
+      wide: true,
+      bodyHTML: `
+        <p class="muted" style="margin-bottom:14px">띄어쓰기나 괄호만 다른 항목을 묶었습니다. <b>남길 항목</b>을 하나씩 고르면 나머지는 삭제됩니다.</p>
+        ${groups.map((g, i) => `
+          <div class="dup-group">
+            <div class="dup-t">${esc(g[0].title)} 외 ${g.length - 1}건</div>
+            ${g.map((r, j) => `
+              <label class="dup-row">
+                <input type="radio" name="dup${i}" value="${r.id}" ${j === 0 ? 'checked' : ''}>
+                <span class="dup-name">${esc(r.title)}</span>
+                ${r.done ? '<span class="dup-tag">완료</span>' : ''}
+                ${r.memo ? `<span class="dup-memo">${esc(r.memo)}</span>` : ''}
+              </label>`).join('')}
+          </div>`).join('')}
+        <div class="muted" style="margin-top:10px">※ 뜻은 같지만 표현이 다른 항목(예: "CS 전화번호" / "소비자 상담 전화번호")은 자동으로 묶이지 않습니다. 목록에서 ✕로 직접 지워 주세요.</div>`,
+      saveLabel: '정리하기',
+      onSave: async (m) => {
+        let removed = 0;
+        for (let i = 0; i < groups.length; i++) {
+          const keep = m.querySelector(`input[name="dup${i}"]:checked`);
+          if (!keep) continue;
+          for (const r of groups[i]) {
+            if (String(r.id) === String(keep.value)) continue;
+            await DB.remove('requests', r.id);
+            removed++;
+          }
+        }
+        toast(removed ? `${removed}건을 정리했습니다` : '정리할 항목이 없습니다');
+        rerender();
+      }
+    });
+  }
+
+  // ---------- 작업물 묶음에서 가져오기 ----------
+  async function importDeliverySets(c, rerender) {
+    const cats = await DB.list('delivery_categories');
+    const stages = await DB.list('delivery_templates');
+    const cnt = {}; stages.forEach(s => { cnt[s.category_id] = (cnt[s.category_id] || 0) + 1; });
+    const withStages = cats.filter(x => cnt[x.id]);
+    if (!withStages.length) {
+      toast('먼저 [항목 설정 → 작업물 묶음]에서 단계를 만들어 주세요'); return;
+    }
+    modal({
+      title: '작업물 묶음에서 가져오기',
+      wide: true,
+      bodyHTML: `
+        <p class="muted" style="margin-bottom:12px">선택한 묶음의 단계가 <b>예정</b> 상태로 깔립니다. 실제로 전달할 때 ✎로 파일명·링크·날짜를 채우면 완료로 바뀝니다.</p>
+        <div class="chk-grid">
+          ${withStages.map(x => `
+            <label class="chk"><input type="checkbox" data-set="${x.id}">
+            <span>${esc(x.name)}<em>${cnt[x.id]}단계</em></span></label>`).join('')}
+        </div>`,
+      saveLabel: '가져오기',
+      onSave: async (m) => {
+        const ids = [...m.querySelectorAll('[data-set]:checked')].map(x => x.dataset.set);
+        if (!ids.length) { toast('가져올 묶음을 선택하세요'); return false; }
+        const added = await applyDeliverySets(c.id, ids);
+        toast(added ? `${added}개 단계를 깔았습니다` : '새로 추가할 단계가 없습니다(모두 이미 있음)');
+        rerender();
+      }
+    });
+  }
+
   // ---------- 작업물 기록 모달 ----------
   async function editDelivery(c, rerender, d) {
     const isNew = !d;
@@ -474,8 +609,15 @@ window.ClientShare = (function () {
             ${services.map(s => `<option value="${s.id}" ${d && String(d.service_id) === String(s.id) ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}
           </select></div>
         <div class="field"><label>메모</label>
-          <input class="input" id="dl-memo" placeholder="예: 인쇄소 직접 전달, 원본 2.4GB" value="${d ? esc(d.memo || '') : ''}"></div>`,
+          <input class="input" id="dl-memo" placeholder="예: 인쇄소 직접 전달, 원본 2.4GB" value="${d ? esc(d.memo || '') : ''}"></div>
+        <label class="chk"><input type="checkbox" id="dl-done" ${isNew || isDelivered(d) ? 'checked' : ''}>
+          <span>✅ 전달 완료 <em>체크를 풀면 "예정"으로 남습니다</em></span></label>`,
       saveLabel: isNew ? '추가' : '저장',
+      onOpen: (m) => {
+        // 예정 항목을 "전달 완료"로 바꾸면 날짜가 비어 있을 때 오늘로 채워준다
+        const chk = m.querySelector('#dl-done'), dt = m.querySelector('#dl-date');
+        chk.addEventListener('change', () => { if (chk.checked && !dt.value) dt.value = todayKey(); });
+      },
       onSave: async (m) => {
         const name = m.querySelector('#dl-name').value.trim();
         if (!name) { toast('작업물 이름을 입력하세요'); return false; }
@@ -488,7 +630,8 @@ window.ClientShare = (function () {
           category_id: m.querySelector('#dl-cat').value || null,
           service_id: m.querySelector('#dl-svc').value || null,
           date: m.querySelector('#dl-date').value || null,
-          memo: m.querySelector('#dl-memo').value.trim()
+          memo: m.querySelector('#dl-memo').value.trim(),
+          delivered: m.querySelector('#dl-done').checked
         };
         if (isNew) {
           const cnt = (await DB.list('deliveries', { company_id: c.id })).length;
@@ -504,7 +647,8 @@ window.ClientShare = (function () {
   return {
     sectionsHTML, bind,
     clientUrl, kakaoText, ensureShareKeys, isExpired,
-    applyRequestSets, applyLicenseSets,
+    applyRequestSets, applyLicenseSets, applyDeliverySets,
+    normTitle, isDelivered,
     CHANNELS, DIRECTIONS
   };
 })();

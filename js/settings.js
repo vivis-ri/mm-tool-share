@@ -12,7 +12,7 @@ window.Settings = (function () {
     { id: 'service', label: '서비스 항목', sub: '서비스 항목 노출 순서를 정해두면 프로젝트 현황과 업체 상세에서 같은 순서로 표시됩니다.' },
     { id: 'managers', label: '담당자', sub: '담당자를 등록해두면 업체와 프로세스 단계에서 선택 한 번으로 채워집니다. 연락처는 클라이언트 대시보드에도 표시됩니다.' },
     { id: 'reqsets', label: '필요서류 묶음', sub: '인허가 유형이나 서비스 항목별로 필요 서류를 묶어두면, 업체에 지정할 때 요청사항 체크리스트가 자동으로 만들어집니다.' },
-    { id: 'delcats', label: '작업물 카테고리', sub: '작업물 전달 기록에서 고를 카테고리 목록입니다.' }
+    { id: 'delcats', label: '작업물 묶음', sub: '작업물 전달 기록의 분류이자, 시안 진행 순서 묶음입니다. 단계를 넣어두면 업체에 한 번에 깔 수 있습니다.' }
   ];
 
   let tab = localStorage.getItem('mm-settings-tab') || 'service';
@@ -63,6 +63,7 @@ window.Settings = (function () {
     const allProc = await DB.list('process_templates');
     const sets = await DB.list('request_sets');
     const setName = {}; sets.forEach(s => { setName[s.id] = s.name; });
+    (await DB.list('delivery_categories')).forEach(c => { setName[c.id] = c.name; });
     const procBy = {};
     allProc.forEach(p => { (procBy[p.service_template_id] = procBy[p.service_template_id] || []).push(p); });
 
@@ -86,6 +87,7 @@ window.Settings = (function () {
 
   function tplCard(t, procs, index, setName) {
     const linked = (t.request_set_ids || []).map(id => setName[id]).filter(Boolean);
+    const linkedDlv = (t.delivery_set_ids || []).map(id => setName[id]).filter(Boolean);
     return `
       <div class="tpl-card card" data-id="${t.id}">
         <div class="tpl-top">
@@ -103,7 +105,8 @@ window.Settings = (function () {
             <button class="icon-btn" data-del-tpl title="항목 삭제">🗑</button>
           </div>
         </div>
-        ${linked.length ? `<div class="tpl-sets">📋 ${linked.map(n => `<span class="set-chip">${esc(n)}</span>`).join('')}</div>` : ''}
+        ${linked.length ? `<div class="tpl-sets">📋 서류 ${linked.map(n => `<span class="set-chip">${esc(n)}</span>`).join('')}</div>` : ''}
+        ${linkedDlv.length ? `<div class="tpl-sets">📦 작업물 ${linkedDlv.map(n => `<span class="set-chip dlv">${esc(n)}</span>`).join('')}</div>` : ''}
         <div class="proc-steps" data-steps>
           ${procs.length
             ? procs.map((p, i) => stepRow(p, i)).join('')
@@ -219,6 +222,11 @@ window.Settings = (function () {
     const isNew = !t;
     const sets = await DB.list('request_sets');
     const picked = new Set(t ? (t.request_set_ids || []) : []);
+    const allCats = await DB.list('delivery_categories');
+    const stageCnt = {};
+    (await DB.list('delivery_templates')).forEach(s => { stageCnt[s.category_id] = (stageCnt[s.category_id] || 0) + 1; });
+    const dlvSets = allCats.filter(c => stageCnt[c.id]);
+    const pickedDlv = new Set(t ? (t.delivery_set_ids || []) : []);
     modal({
       title: isNew ? '서비스 항목 추가' : '서비스 항목 수정',
       bodyHTML: `
@@ -236,6 +244,13 @@ window.Settings = (function () {
                 <label class="chk"><input type="checkbox" data-set="${s.id}" ${picked.has(s.id) ? 'checked' : ''}>
                 <span>${esc(s.name)}<em>${esc(s.kind || '공통')}</em></span></label>`).join('')}</div>`
             : `<div class="muted">등록된 묶음이 없습니다. 필요서류 묶음 탭에서 먼저 만들어 주세요.</div>`}
+        </div>
+        <div class="field"><label>작업물 묶음 <span class="muted">(이 항목을 업체에 추가하면 시안 단계가 예정으로 깔립니다)</span></label>
+          ${dlvSets.length
+            ? `<div class="chk-grid">${dlvSets.map(c => `
+                <label class="chk"><input type="checkbox" data-dset="${c.id}" ${pickedDlv.has(c.id) ? 'checked' : ''}>
+                <span>${esc(c.name)}<em>${stageCnt[c.id]}단계</em></span></label>`).join('')}</div>`
+            : `<div class="muted">단계가 있는 작업물 묶음이 없습니다. 작업물 묶음 탭에서 먼저 만들어 주세요.</div>`}
         </div>`,
       saveLabel: isNew ? '추가' : '저장',
       onSave: async (m) => {
@@ -243,11 +258,12 @@ window.Settings = (function () {
         const cat = m.querySelector('#f-cat').value.trim() || '기타';
         const amt = Number(m.querySelector('#f-amt').value) || 0;
         const setIds = [...m.querySelectorAll('[data-set]:checked')].map(c => c.dataset.set);
+        const dsetIds = [...m.querySelectorAll('[data-dset]:checked')].map(c => c.dataset.dset);
         if (!name) { toast('항목명을 입력하세요'); return false; }
         if (isNew) {
-          await DB.insert('service_templates', { name, category: cat, default_amount: amt, request_set_ids: setIds, sort_order: await nextTemplateSortOrder(name) });
+          await DB.insert('service_templates', { name, category: cat, default_amount: amt, request_set_ids: setIds, delivery_set_ids: dsetIds, sort_order: await nextTemplateSortOrder(name) });
         } else {
-          await DB.update('service_templates', t.id, { name, category: cat, default_amount: amt, request_set_ids: setIds });
+          await DB.update('service_templates', t.id, { name, category: cat, default_amount: amt, request_set_ids: setIds, delivery_set_ids: dsetIds });
         }
         toast('저장했습니다'); render(root);
       }
@@ -531,45 +547,105 @@ window.Settings = (function () {
   //  4. 작업물 카테고리
   // ============================================================
   async function delCatsBody() {
-    const rows = await DB.list('delivery_categories');
+    const cats = await DB.list('delivery_categories');
+    const stages = await DB.list('delivery_templates');
+    const byCat = {};
+    stages.forEach(s => { (byCat[s.category_id] = byCat[s.category_id] || []).push(s); });
+
     return `
       <div class="set-toolbar only-edit">
-        <button class="btn primary" id="add-cat">+ 카테고리 추가</button>
+        <button class="btn primary" id="add-cat">+ 묶음 추가</button>
       </div>
-      ${rows.length ? `
-        <div class="mst-list" data-cat-list>
-          ${rows.map(c => `
-            <div class="mst-row card" data-id="${c.id}">
-              <span class="drag-handle only-edit" title="끌어서 순서 변경">⠿</span>
-              <span class="mst-name">${esc(c.name)}</span>
-              <span class="mst-tools only-edit">
-                <button class="icon-btn xs" data-edit>✎</button>
-                <button class="icon-btn xs" data-del>✕</button>
-              </span>
-            </div>`).join('')}
-        </div>` : empty('📦', '카테고리가 없습니다.<br><b>+ 카테고리 추가</b>로 시작하세요.')}
-      ${hint(`작업물 전달 기록을 남길 때 고르는 목록이고, 클라이언트 대시보드에서는 이 카테고리로 필터가 만들어집니다. 전달 수단(${CHANNELS.join(' / ')})은 고정입니다.`)}`;
+      ${cats.length ? `
+        <div class="tpl-list" data-cat-list>
+          ${cats.map(c => catCard(c, byCat[c.id] || [])).join('')}
+        </div>` : empty('📦', '작업물 묶음이 없습니다.<br><b>+ 묶음 추가</b>로 시작하세요.')}
+      ${hint(`단계를 넣어둔 묶음(예: 패키지 = 컨셉제안서 → 1차시안 → …)은 업체 상세의 <b>작업물 전달 기록 → 묶음에서 가져오기</b>로 한 번에 깔 수 있고, 클라이언트 대시보드에서는 이 묶음 이름으로 필터가 만들어집니다. 단계를 안 넣으면 단순 분류로만 쓰입니다. 전달 수단(${CHANNELS.join(' / ')})은 고정입니다.`)}`;
+  }
+
+  function catCard(c, stages) {
+    return `
+      <div class="tpl-card card" data-id="${c.id}">
+        <div class="tpl-top">
+          <div class="tpl-name">
+            <span class="drag-handle tpl-drag only-edit" title="끌어서 순서 변경">⠿</span>
+            <span class="dot"></span>
+            <b>${esc(c.name)}</b>
+            <span class="tpl-amt">${stages.length ? `${stages.length}단계` : '분류 전용'}</span>
+          </div>
+          <div class="tpl-actions only-edit">
+            <button class="btn sm ghost" data-bulk>📋 일괄 추가</button>
+            <button class="icon-btn" data-edit-cat title="묶음 수정">✎</button>
+            <button class="icon-btn" data-del-cat title="묶음 삭제">🗑</button>
+          </div>
+        </div>
+        <div class="proc-steps" data-stages>
+          ${stages.length
+            ? stages.map((s, i) => `
+              <div class="step-row" data-id="${s.id}">
+                <span class="drag-handle only-edit" title="끌어서 순서 변경">⠿</span>
+                <span class="step-idx">${i + 1}</span>
+                <span class="step-name">${esc(s.name)}</span>
+                <span class="step-tools only-edit">
+                  <button class="icon-btn xs" data-edit-stage>✎</button>
+                  <button class="icon-btn xs" data-del-stage>✕</button>
+                </span>
+              </div>`).join('')
+            : `<div class="proc-empty">단계가 없습니다(분류로만 사용).</div>`}
+        </div>
+        <button class="add-step only-edit" data-add-stage>+ 단계 추가</button>
+      </div>`;
   }
 
   function bindDelCats(root) {
     root.querySelector('#add-cat')?.addEventListener('click', () => editCat(root));
+
     const list = root.querySelector('[data-cat-list]');
     if (list) DragSort.enable(list, {
-      itemSelector: '.mst-row', handleSelector: '.drag-handle',
+      itemSelector: '.tpl-card', handleSelector: '.tpl-drag',
       onReorder: async (ids) => {
         for (let i = 0; i < ids.length; i++) await DB.update('delivery_categories', ids[i], { sort_order: i + 1 });
         render(root);
       }
     });
-    root.querySelectorAll('.mst-row').forEach(rowEl => {
-      const id = rowEl.dataset.id;
-      rowEl.querySelector('[data-edit]')?.addEventListener('click', async () => {
+
+    root.querySelectorAll('.tpl-card').forEach(cardEl => {
+      const id = cardEl.dataset.id;
+      const q = s => cardEl.querySelector(s);
+
+      q('[data-edit-cat]')?.addEventListener('click', async () => {
         editCat(root, (await DB.list('delivery_categories', { id }))[0]);
       });
-      rowEl.querySelector('[data-del]')?.addEventListener('click', () => {
-        confirm('이 카테고리를 삭제할까요? 이미 기록된 작업물은 "기타"로 표시됩니다.', async () => {
-          await DB.remove('delivery_categories', id); toast('삭제했습니다'); render(root);
+      q('[data-del-cat]')?.addEventListener('click', () => {
+        confirm('이 묶음과 안에 든 단계를 모두 삭제할까요? 이미 기록된 작업물은 분류만 비워집니다.', async () => {
+          for (const s of await DB.list('delivery_templates', { category_id: id })) await DB.remove('delivery_templates', s.id);
+          await DB.remove('delivery_categories', id);
+          toast('삭제했습니다'); render(root);
         }, true);
+      });
+      q('[data-add-stage]')?.addEventListener('click', () => editStage(root, id));
+      q('[data-bulk]')?.addEventListener('click', () => bulkAdd(root, {
+        title: '작업물 단계 일괄 추가', unit: '단계', placeholder: '컨셉제안서\n1차시안\n2차시안\n수정본\n최종시안\n...',
+        table: 'delivery_templates', fk: { category_id: id }, extra: {}
+      }));
+
+      cardEl.querySelectorAll('.step-row').forEach(rowEl => {
+        const sid = rowEl.dataset.id;
+        rowEl.querySelector('[data-edit-stage]')?.addEventListener('click', async () => {
+          editStage(root, id, (await DB.list('delivery_templates', { id: sid }))[0]);
+        });
+        rowEl.querySelector('[data-del-stage]')?.addEventListener('click', async () => {
+          await DB.remove('delivery_templates', sid); toast('삭제했습니다'); render(root);
+        });
+      });
+
+      const box = q('[data-stages]');
+      if (box) DragSort.enable(box, {
+        itemSelector: '.step-row', handleSelector: '.drag-handle',
+        onReorder: async (ids) => {
+          for (let i = 0; i < ids.length; i++) await DB.update('delivery_templates', ids[i], { sort_order: i + 1 });
+          render(root);
+        }
       });
     });
   }
@@ -577,19 +653,41 @@ window.Settings = (function () {
   function editCat(root, c) {
     const isNew = !c;
     modal({
-      title: isNew ? '작업물 카테고리 추가' : '카테고리 수정',
+      title: isNew ? '작업물 묶음 추가' : '묶음 수정',
       bodyHTML: `
-        <div class="field"><label>카테고리명</label>
-          <input class="input" id="f-cname" placeholder="예: 인쇄용 원고" value="${c ? esc(c.name) : ''}"></div>`,
+        <div class="field"><label>묶음 이름</label>
+          <input class="input" id="f-cname" placeholder="예: 패키지, 로고, 상세페이지, 촬영 원본" value="${c ? esc(c.name) : ''}"></div>`,
       saveLabel: isNew ? '추가' : '저장',
       onSave: async (m) => {
         const name = m.querySelector('#f-cname').value.trim();
-        if (!name) { toast('카테고리명을 입력하세요'); return false; }
+        if (!name) { toast('묶음 이름을 입력하세요'); return false; }
         if (isNew) {
           const cnt = (await DB.list('delivery_categories')).length;
           await DB.insert('delivery_categories', { name, sort_order: cnt + 1 });
         } else {
           await DB.update('delivery_categories', c.id, { name });
+        }
+        toast('저장했습니다'); render(root);
+      }
+    });
+  }
+
+  function editStage(root, catId, s) {
+    const isNew = !s;
+    modal({
+      title: isNew ? '작업물 단계 추가' : '단계 수정',
+      bodyHTML: `
+        <div class="field"><label>단계명</label>
+          <input class="input" id="f-stname" placeholder="예: 1차시안, 최종시안, 인쇄가이드 및 인쇄용 파일" value="${s ? esc(s.name) : ''}"></div>`,
+      saveLabel: isNew ? '추가' : '저장',
+      onSave: async (m) => {
+        const name = m.querySelector('#f-stname').value.trim();
+        if (!name) { toast('단계명을 입력하세요'); return false; }
+        if (isNew) {
+          const cnt = (await DB.list('delivery_templates', { category_id: catId })).length;
+          await DB.insert('delivery_templates', { category_id: catId, name, sort_order: cnt + 1 });
+        } else {
+          await DB.update('delivery_templates', s.id, { name });
         }
         toast('저장했습니다'); render(root);
       }
