@@ -187,3 +187,19 @@ body.readonly .stage-card:hover { transform: none; box-shadow: none; }
 .flag-btn:hover { background: var(--surface); box-shadow: var(--shadow-sm); }
 .stage-star-mark { position: absolute; top: 7px; right: 26px; font-size: 11px; pointer-events: none; }
 .stage-card:hover .stage-star-mark { opacity: 0; }
+
+/* 작업물 — 예정/완료 구분 */
+.dlv-sub { font-size: 11.5px; font-weight: 800; color: var(--ink-45); margin: 12px 2px 2px; }
+.dlv-dir.wait { color: var(--ink-45); background: var(--surface-2); border: 1px solid var(--line); }
+.dlv-row.todo { background: var(--surface-2); border-style: dashed; }
+.dlv-row.todo .dlv-name { color: var(--ink-70); font-weight: 500; }
+
+/* 중복 정리 모달 */
+.dup-group { border: 1px solid var(--line); border-radius: 11px; padding: 11px 13px; margin-bottom: 10px; }
+.dup-t { font-size: 12px; font-weight: 800; color: var(--ink-45); margin-bottom: 7px; }
+.dup-row { display: flex; align-items: center; gap: 9px; padding: 7px 4px; border-radius: 8px; cursor: pointer; }
+.dup-row:hover { background: var(--surface-2); }
+.dup-row input { accent-color: var(--orange); width: 15px; height: 15px; flex-shrink: 0; }
+.dup-name { font-size: 13.5px; font-weight: 600; }
+.dup-tag { font-size: 10.5px; font-weight: 700; color: var(--st-done); background: var(--st-done-bg); border-radius: 6px; padding: 1px 7px; }
+.dup-memo { font-size: 11.5px; color: var(--ink-45); }

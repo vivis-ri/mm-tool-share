@@ -73,6 +73,7 @@
 /* ---------- 서비스 항목에 걸린 필요서류 묶음 ---------- */
 .tpl-sets { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 12px; color: var(--ink-45); margin: -4px 0 10px 4px; }
 .set-chip { background: var(--orange-soft); color: var(--orange-deep); border-radius: 7px; padding: 2px 9px; font-weight: 700; }
+.set-chip.dlv { background: var(--st-pause-bg); color: var(--st-pause); }
 
 /* ---------- 체크박스 그리드(묶음 선택) ---------- */
 .chk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px; }

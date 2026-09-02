@@ -289,7 +289,7 @@ window.Detail = (function () {
         const picked = [...m.querySelectorAll('input:checked')].map(i => i.value);
         if (!picked.length) { toast('추가할 항목을 선택하세요'); return false; }
         let order = (await DB.list('services', { company_id: c.id })).length;
-        let docsAdded = 0;
+        let docsAdded = 0, dlvAdded = 0;
         for (const tid of picked) {
           const t = templates.find(x => String(x.id) === String(tid));
           order++;
@@ -307,12 +307,15 @@ window.Detail = (function () {
               client_memo: '', milestone: false, client_visible: true, sort_order: so
             });
           }
-          // 항목에 걸린 필요서류 묶음 → 요청사항 자동 생성(중복 제외)
+          // 항목에 걸린 묶음 → 요청사항·작업물 단계 자동 생성(중복 제외)
           docsAdded += await window.ClientShare.applyRequestSets(c.id, t.request_set_ids || [], svc.id);
+          dlvAdded += await window.ClientShare.applyDeliverySets(c.id, t.delivery_set_ids || [], svc.id);
         }
         await syncCompanyQuote(c.id);
         await syncCompanyStatus(c.id);
-        toast(`${picked.length}개 항목을 세팅했습니다${docsAdded ? ` · 요청사항 ${docsAdded}건 추가` : ''}`);
+        toast(`${picked.length}개 항목을 세팅했습니다`
+          + (docsAdded ? ` · 요청사항 ${docsAdded}건` : '')
+          + (dlvAdded ? ` · 작업물 ${dlvAdded}단계` : ''));
         render(root, c.id, back);
       }
     });

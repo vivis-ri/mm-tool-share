@@ -431,32 +431,40 @@
 
   // ---------- 7. 작업물 전달 기록 ----------
   function deliveriesSection() {
-    const rows = [...(D.deliveries || [])]
+    const all = D.deliveries || [];
+    if (!all.length) return '';
+    const cats = [...new Set(all.map(r => r.category).filter(Boolean))];
+    const shown = dlvFilter ? all.filter(r => r.category === dlvFilter) : all;
+    const done = shown.filter(r => r.delivered)
       .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
-    if (!rows.length) return '';
-    const cats = [...new Set(rows.map(r => r.category).filter(Boolean))];
-    const shown = dlvFilter ? rows.filter(r => r.category === dlvFilter) : rows;
+    const todo = shown.filter(r => !r.delivered)
+      .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+
+    const row = (r) => `
+      <li class="dlv ${r.delivered ? '' : 'todo'}">
+        <span class="dlv-dir ${r.delivered ? (r.direction === '수령' ? 'in' : 'out') : 'wait'}">${r.delivered ? (r.direction === '수령' ? '받음' : '보냄') : '예정'}</span>
+        <div class="dlv-main">
+          <span class="dlv-n">${esc(r.name)}</span>
+          <span class="dlv-s">${r.category ? esc(r.category) : ''}${r.delivered && r.channel ? ' · ' + esc(r.channel) : ''}${r.memo ? ' · ' + esc(r.memo) : ''}</span>
+        </div>
+        <span class="dlv-d">${r.date ? esc(fmtShort(r.date)) : ''}</span>
+        ${r.url ? `<a class="dlv-go" href="${esc(r.url)}" target="_blank" rel="noopener">열기 ↗</a>` : ''}
+      </li>`;
+
     return `
       <section class="sec">
-        <div class="sec-h"><h2>작업물 전달 기록</h2><span class="cnt">${rows.length}건</span></div>
+        <div class="sec-h">
+          <h2>작업물</h2>
+          <span class="cnt">전달 ${all.filter(r => r.delivered).length}건${all.some(r => !r.delivered) ? ` · 예정 ${all.filter(r => !r.delivered).length}건` : ''}</span>
+        </div>
         ${cats.length ? `
           <div class="chips">
             <button class="chip ${dlvFilter ? '' : 'on'}" data-cat="">전체</button>
             ${cats.map(c => `<button class="chip ${dlvFilter === c ? 'on' : ''}" data-cat="${esc(c)}">${esc(c)}</button>`).join('')}
           </div>` : ''}
-        <ul class="dlvs">
-          ${shown.map(r => `
-            <li class="dlv">
-              <span class="dlv-dir ${r.direction === '수령' ? 'in' : 'out'}">${r.direction === '수령' ? '받음' : '보냄'}</span>
-              <div class="dlv-main">
-                <span class="dlv-n">${esc(r.name)}</span>
-                <span class="dlv-s">${r.category ? esc(r.category) + ' · ' : ''}${esc(r.channel || '기타')}${r.memo ? ' · ' + esc(r.memo) : ''}</span>
-              </div>
-              <span class="dlv-d">${r.date ? esc(fmtShort(r.date)) : ''}</span>
-              ${r.url ? `<a class="dlv-go" href="${esc(r.url)}" target="_blank" rel="noopener">열기 ↗</a>` : ''}
-            </li>`).join('')}
-        </ul>
-        ${shown.length ? '' : '<p class="none">이 카테고리에 기록이 없습니다.</p>'}
+        ${done.length ? `<ul class="dlvs">${done.map(row).join('')}</ul>` : ''}
+        ${todo.length ? `<div class="dlv-sub">앞으로 전달드릴 작업물</div><ul class="dlvs">${todo.map(row).join('')}</ul>` : ''}
+        ${shown.length ? '' : '<p class="none">이 분류에 기록이 없습니다.</p>'}
       </section>`;
   }
 
