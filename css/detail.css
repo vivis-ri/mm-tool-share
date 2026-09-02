@@ -119,3 +119,71 @@ body.readonly .stage-card:hover { transform: none; box-shadow: none; }
 @media (max-width: 480px) {
   .d-info { grid-template-columns: 1fr; }
 }
+
+/* ============================================================
+   클라이언트 공유 (client-share.js)
+   ============================================================ */
+.cs-card { margin: 28px 0 26px; padding: 18px 20px; }
+.cs-top { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.cs-top h3 { font-size: 17px; font-weight: 700; }
+.cs-top #cs-settings { margin-left: auto; }
+.cs-state { font-size: 11.5px; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
+.cs-state.on { color: var(--st-done); background: var(--st-done-bg); }
+.cs-state.off { color: var(--st-plan); background: var(--st-plan-bg); }
+.cs-state.exp { color: var(--st-late); background: var(--st-late-bg); }
+.cs-state.wait { color: var(--orange-deep); background: var(--st-run-bg); }
+
+.cs-linkrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.cs-linkrow input {
+  flex: 1; min-width: 220px; padding: 9px 12px;
+  border: 1px solid var(--line-strong); border-radius: 9px;
+  background: var(--surface-2); font-size: 12.5px; color: var(--ink-70);
+}
+.cs-warn { margin-top: 10px; font-size: 12.5px; color: var(--st-late); font-weight: 600; }
+.cs-note { margin-top: 10px; font-size: 12.5px; color: var(--ink-45); line-height: 1.6; }
+.cs-note code { background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; font-size: 11.5px; }
+.cs-bigchk { margin-bottom: 16px; }
+.chk-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.chk-row .chk span em { font-style: normal; font-size: 10.5px; color: var(--ink-45); }
+
+/* ---------- 요청사항 ---------- */
+.req-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 30px; }
+.req-row { display: flex; align-items: center; gap: 11px; padding: 11px 15px; transition: opacity .12s; }
+.req-row.done { opacity: .55; }
+.req-row.done .req-title { text-decoration: line-through; }
+.req-chk { display: flex; align-items: center; }
+.req-chk input { width: 17px; height: 17px; accent-color: var(--orange); cursor: pointer; }
+.req-main { flex: 1; min-width: 0; }
+.req-title { font-size: 14px; font-weight: 600; }
+.req-memo { font-size: 11.5px; color: var(--ink-45); margin-top: 2px; }
+.req-due { font-size: 12px; color: var(--orange-deep); font-weight: 700; white-space: nowrap; }
+.req-tools { display: flex; gap: 1px; opacity: 0; transition: opacity .12s; }
+.req-row:hover .req-tools { opacity: 1; }
+
+/* ---------- 작업물 전달 기록 ---------- */
+.dlv-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 30px; }
+.dlv-row { display: flex; align-items: center; gap: 11px; padding: 11px 15px; }
+.dlv-dir { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 7px; flex-shrink: 0; }
+.dlv-dir.out { color: var(--orange-deep); background: var(--st-run-bg); }
+.dlv-dir.in { color: var(--st-pause); background: var(--st-pause-bg); }
+.dlv-main { flex: 1; min-width: 0; }
+.dlv-name { font-size: 13.5px; font-weight: 600; word-break: break-all; }
+.dlv-link { color: var(--orange-deep); text-decoration: none; font-weight: 800; }
+.dlv-link:hover { text-decoration: underline; }
+.dlv-memo { font-size: 11.5px; color: var(--ink-45); margin-top: 2px; }
+.dlv-chip { font-size: 11px; font-weight: 700; color: var(--ink-70); background: var(--surface-2); border: 1px solid var(--line); border-radius: 7px; padding: 2px 8px; white-space: nowrap; }
+.dlv-chip.ch { color: var(--ink-45); }
+.dlv-date { font-size: 12px; color: var(--ink-45); white-space: nowrap; }
+.dlv-tools { display: flex; gap: 1px; opacity: 0; transition: opacity .12s; }
+.dlv-row:hover .dlv-tools { opacity: 1; }
+
+.empty.sm { padding: 22px 16px; }
+.empty.sm p { font-size: 13px; }
+
+/* ---------- 프로세스 단계 플래그(⭐ 주요일정 · 👁 공개) ---------- */
+.stage-flags { position: absolute; top: 6px; right: 26px; display: flex; gap: 1px; opacity: 0; transition: opacity .12s; }
+.stage-card:hover .stage-flags { opacity: 1; }
+.flag-btn { width: 20px; height: 20px; border-radius: 6px; font-size: 11px; line-height: 1; color: var(--ink-45); }
+.flag-btn:hover { background: var(--surface); box-shadow: var(--shadow-sm); }
+.stage-star-mark { position: absolute; top: 7px; right: 26px; font-size: 11px; pointer-events: none; }
+.stage-card:hover .stage-star-mark { opacity: 0; }

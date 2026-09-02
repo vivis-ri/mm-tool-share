@@ -15,6 +15,8 @@ window.Detail = (function () {
     const idx = companies.findIndex(x => String(x.id) === String(companyId));
     const prev = companies[idx - 1], next = companies[idx + 1];
 
+    const managers = await DB.list('managers');
+    const mgr = managerOf(c, managers);
     const serviceTemplates = await DB.list('service_templates');
     const services = (await DB.list('services', { company_id: companyId })).sort(UI.serviceSorter(serviceTemplates));
     const allProc = await DB.list('processes');
@@ -48,7 +50,8 @@ window.Detail = (function () {
           <div class="d-info">
             ${info('대표자', c.rep_name)} ${info('아이템', c.item)} ${info('연락처', c.contact)}
             ${info('최초견적일', c.first_quote_date || '-')} ${infoHTML('총 견적', UI.moneyVatHTML(c.total_quote))}
-            ${info('담당자', c.manager || '미지정')}
+            ${info('담당자', mgr.name ? (mgr.contact ? `${mgr.name} · ${mgr.contact}` : mgr.name) : '미지정')}
+            ${c.license_type ? info('인허가', c.license_type) : ''}
           </div>
           ${c.memo ? `<div class="d-memo">📝 ${esc(c.memo)}</div>` : ''}
         </div>
@@ -71,10 +74,20 @@ window.Detail = (function () {
       <div class="svc-list">
         ${services.length ? services.map(s => svcBlock(s, procBy[s.id] || [])).join('')
           : `<div class="empty"><div class="em-ic">🧩</div><p>아직 서비스 항목이 없습니다.<br><b>+ 항목 추가</b>로 이 업체가 진행할 항목을 선택하세요.</p></div>`}
-      </div>`;
+      </div>
+
+      ${await window.ClientShare.sectionsHTML(c)}`;
 
     bind(root, c, back);
+    window.ClientShare.bind(root, c, () => render(root, c.id, back));
     if (window.App && window.App.refreshSidebar) window.App.refreshSidebar();
+  }
+
+  // 담당자 마스터(managers)를 우선 쓰고, 없으면 예전 텍스트 필드(manager)를 그대로 보여준다.
+  function managerOf(c, managers) {
+    const m = (managers || []).find(x => String(x.id) === String(c.manager_id));
+    if (m) return { name: m.name, contact: m.contact || '', email: m.email || '' };
+    return { name: c.manager || '', contact: '', email: '' };
   }
 
   function info(label, val) {
@@ -101,6 +114,7 @@ window.Detail = (function () {
           <div class="svc-head-r">
             <span class="mini-prog"><span style="width:${pct}%"></span></span>
             <span class="mini-prog-t">${pct}%</span>
+            <button class="icon-btn only-edit" data-svc-eye title="${s.client_visible === false ? '클라이언트에게 숨김' : '클라이언트에게 보임'}">${s.client_visible === false ? '🙈' : '👁'}</button>
             <button class="icon-btn only-edit" data-edit-svc title="금액/상태 수정">✎</button>
             <button class="icon-btn only-edit" data-del-svc title="항목 삭제">🗑</button>
           </div>
@@ -127,6 +141,11 @@ window.Detail = (function () {
           ${p.assignee ? `<span class="stage-asg">👤 ${esc(p.assignee)}</span>` : ''}
         </div>
         ${p.memo ? `<div class="stage-memo" title="${esc(p.memo)}">💬 ${esc(p.memo)}</div>` : ''}
+        <div class="stage-flags only-edit">
+          <button class="flag-btn ${p.milestone ? 'on' : ''}" data-flag-star title="${p.milestone ? '주요일정 — 클라이언트 대시보드 D-day에 표시' : '주요일정으로 지정'}">${p.milestone ? '⭐' : '☆'}</button>
+          <button class="flag-btn ${p.client_visible === false ? 'off' : ''}" data-flag-eye title="${p.client_visible === false ? '클라이언트에게 숨김' : '클라이언트에게 보임'}">${p.client_visible === false ? '🙈' : '👁'}</button>
+        </div>
+        ${p.milestone ? '<span class="stage-star-mark" title="주요일정">⭐</span>' : ''}
         <button class="stage-del only-edit" data-del-proc title="삭제">✕</button>
       </div>`;
   }
@@ -163,6 +182,12 @@ window.Detail = (function () {
       block.querySelector('[data-edit-svc]')?.addEventListener('click', async () => {
         const s = (await DB.list('services', { id: sid }))[0]; editService(root, c, back, s);
       });
+      block.querySelector('[data-svc-eye]')?.addEventListener('click', async () => {
+        if (DB.READONLY) return;
+        const s = (await DB.list('services', { id: sid }))[0];
+        await DB.update('services', sid, { client_visible: s.client_visible === false });
+        render(root, c.id, back);
+      });
       block.querySelector('[data-del-svc]')?.addEventListener('click', () => {
         confirm('이 서비스 항목과 프로세스 단계를 삭제할까요?', async () => {
           const ps = await DB.list('processes', { service_id: sid });
@@ -190,9 +215,24 @@ window.Detail = (function () {
       block.querySelectorAll('.stage-card').forEach(cardEl => {
         const pid = cardEl.dataset.pid;
         cardEl.addEventListener('click', async (e) => {
-          if (e.target.closest('[data-del-proc]') || e.target.closest('[data-status-toggle]')) return;
+          if (e.target.closest('[data-del-proc]') || e.target.closest('[data-status-toggle]') || e.target.closest('.stage-flags')) return;
           if (DB.READONLY) return;
           const p = (await DB.list('processes', { id: pid }))[0]; editProcess(root, c, back, sid, p);
+        });
+        // ⭐ 주요일정(클라이언트 D-day) / 👁 클라이언트 공개 여부
+        cardEl.querySelector('[data-flag-star]')?.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if (DB.READONLY) return;
+          const p = (await DB.list('processes', { id: pid }))[0];
+          await DB.update('processes', pid, { milestone: !p.milestone });
+          render(root, c.id, back);
+        });
+        cardEl.querySelector('[data-flag-eye]')?.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if (DB.READONLY) return;
+          const p = (await DB.list('processes', { id: pid }))[0];
+          await DB.update('processes', pid, { client_visible: p.client_visible === false });
+          render(root, c.id, back);
         });
         // 상태 배지 클릭 → 즉시 토글
         cardEl.querySelector('[data-status-toggle]')?.addEventListener('click', async (e) => {
@@ -249,12 +289,13 @@ window.Detail = (function () {
         const picked = [...m.querySelectorAll('input:checked')].map(i => i.value);
         if (!picked.length) { toast('추가할 항목을 선택하세요'); return false; }
         let order = (await DB.list('services', { company_id: c.id })).length;
+        let docsAdded = 0;
         for (const tid of picked) {
           const t = templates.find(x => String(x.id) === String(tid));
           order++;
           const svc = await DB.insert('services', {
             company_id: c.id, template_id: t.id, name: t.name, category: t.category || '기타',
-            amount: t.default_amount || 0, status: '예정', sort_order: order
+            amount: t.default_amount || 0, status: '예정', client_visible: true, sort_order: order
           });
           const steps = await DB.list('process_templates', { service_template_id: t.id });
           let so = 0;
@@ -262,13 +303,16 @@ window.Detail = (function () {
             so++;
             await DB.insert('processes', {
               service_id: svc.id, name: st.name, assignee: st.default_assignee || '',
-              start_date: null, end_date: null, status: '예정', memo: '', sort_order: so
+              start_date: null, end_date: null, status: '예정', memo: '',
+              client_memo: '', milestone: false, client_visible: true, sort_order: so
             });
           }
+          // 항목에 걸린 필요서류 묶음 → 요청사항 자동 생성(중복 제외)
+          docsAdded += await window.ClientShare.applyRequestSets(c.id, t.request_set_ids || [], svc.id);
         }
         await syncCompanyQuote(c.id);
         await syncCompanyStatus(c.id);
-        toast(`${picked.length}개 항목을 세팅했습니다`);
+        toast(`${picked.length}개 항목을 세팅했습니다${docsAdded ? ` · 요청사항 ${docsAdded}건 추가` : ''}`);
         render(root, c.id, back);
       }
     });
@@ -296,19 +340,28 @@ window.Detail = (function () {
     });
   }
 
-  function editProcess(root, c, back, serviceId, p) {
+  async function editProcess(root, c, back, serviceId, p) {
     const isNew = !p;
+    const managers = await DB.list('managers');
     modal({
       title: isNew ? '프로세스 단계 추가' : '단계 수정',
       wide: true,
       bodyHTML: `
         <div class="field"><label>단계명 *</label><input class="input" id="p-name" value="${p ? esc(p.name) : ''}"></div>
         <div class="grid-2">
-          <div class="field"><label>담당자 <span class="muted">(추후 지정)</span></label><input class="input" id="p-asg" value="${p ? esc(p.assignee) : ''}"></div>
+          <div class="field"><label>담당자</label>
+            <input class="input" id="p-asg" list="p-mgr-list" placeholder="${managers.length ? '목록에서 고르거나 직접 입력' : '항목 설정 → 담당자에서 등록해두면 골라 쓸 수 있습니다'}" value="${p ? esc(p.assignee) : ''}">
+            <datalist id="p-mgr-list">${managers.map(m => `<option value="${esc(m.name)}"></option>`).join('')}</datalist></div>
           <div class="field"><label>상태</label><select class="select" id="p-status">${UI.statusOptions(p ? p.status : '예정')}</select></div>
         </div>
         <div class="field"><label>🚩 마감일 <span class="muted">(업무일지 연동)</span></label><input class="input" id="p-end" type="date" value="${p ? (p.end_date || '') : ''}"></div>
-        <div class="field"><label>메모</label><textarea class="input" id="p-memo">${p ? esc(p.memo) : ''}</textarea></div>`,
+        <div class="field"><label>메모 <span class="muted">(내부용 — 클라이언트에게 보이지 않습니다)</span></label><textarea class="input" id="p-memo">${p ? esc(p.memo) : ''}</textarea></div>
+        <div class="field"><label>클라이언트 안내 문구 <span class="muted">(대시보드에 이 단계와 함께 표시)</span></label>
+          <input class="input" id="p-cmemo" placeholder="예: 시안 확인 후 인쇄 진행합니다" value="${p ? esc(p.client_memo || '') : ''}"></div>
+        <div class="chk-row">
+          <label class="chk"><input type="checkbox" id="p-star" ${p && p.milestone ? 'checked' : ''}><span>⭐ 주요일정 <em>대시보드 D-day에 표시</em></span></label>
+          <label class="chk"><input type="checkbox" id="p-vis" ${!p || p.client_visible !== false ? 'checked' : ''}><span>👁 클라이언트에게 공개</span></label>
+        </div>`,
       saveLabel: isNew ? '추가' : '저장',
       onSave: async (m) => {
         const name = m.querySelector('#p-name').value.trim();
@@ -318,7 +371,10 @@ window.Detail = (function () {
           start_date: null,
           end_date: m.querySelector('#p-end').value || null,
           status: m.querySelector('#p-status').value,
-          memo: m.querySelector('#p-memo').value.trim()
+          memo: m.querySelector('#p-memo').value.trim(),
+          client_memo: m.querySelector('#p-cmemo').value.trim(),
+          milestone: m.querySelector('#p-star').checked,
+          client_visible: m.querySelector('#p-vis').checked
         };
         if (isNew) {
           const cnt = (await DB.list('processes', { service_id: serviceId })).length;

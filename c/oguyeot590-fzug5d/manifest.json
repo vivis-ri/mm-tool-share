@@ -1,0 +1,17 @@
+{
+  "name": "오구영590 프로젝트 현황",
+  "short_name": "오구영590",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f1ea",
+  "theme_color": "#FA8619",
+  "icons": [
+    {
+      "src": "../_assets/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

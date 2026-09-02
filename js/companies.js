@@ -711,8 +711,10 @@ window.Companies = (function () {
   }
 
   // ---------- 업체 추가/수정 모달 ----------
-  function editCompany(root, c) {
+  async function editCompany(root, c) {
     const isNew = !c;
+    const managers = await DB.list('managers');
+    const licenseSets = (await DB.list('request_sets')).filter(s => (s.kind || '공통') === '인허가');
     const _tones = UI.companyTones;
     const _curColor = c && c.color != null && c.color !== '' ? c.color : '';
     const _isHex = typeof _curColor === 'string' && _curColor[0] === '#';
@@ -739,8 +741,19 @@ window.Companies = (function () {
           <div class="field"><label>연락처</label><input class="input" id="f-contact" value="${c ? esc(c.contact) : ''}"></div>
           <div class="field"><label>최초견적일</label><input class="input" id="f-date" type="date" value="${c ? (c.first_quote_date || '') : ''}"></div>
           <div class="field"><label>총 견적 (원, VAT 포함)</label><input class="input" id="f-quote" type="number" value="${c ? c.total_quote : ''}"><span class="help-text">서비스 항목 금액이 있으면 합계로 자동 갱신됩니다.</span></div>
-          <div class="field"><label>내부 담당자</label><input class="input" id="f-mgr" value="${c ? esc(c.manager) : ''}"></div>
+          <div class="field"><label>내부 담당자</label>
+            <select class="select" id="f-mgr">
+              <option value="">(미지정)</option>
+              ${managers.map(m => `<option value="${m.id}" ${c && String(c.manager_id) === String(m.id) ? 'selected' : ''}>${esc(m.name)}${m.contact ? ` · ${esc(m.contact)}` : ''}</option>`).join('')}
+              ${c && !c.manager_id && c.manager ? `<option value="__legacy" selected>${esc(c.manager)} (예전 입력)</option>` : ''}
+            </select>
+            ${managers.length ? '' : '<span class="help-text">항목 설정 → 담당자에서 먼저 등록해 주세요.</span>'}</div>
           <div class="field"><label>진행단계</label><select class="select" id="f-status">${UI.statusOptions(c ? c.status : '예정')}</select></div>
+          <div class="field"><label>인허가 유형 <span class="muted">(선택하면 필요 서류가 요청사항으로 자동 생성)</span></label>
+            <select class="select" id="f-lic">
+              <option value="">(없음)</option>
+              ${licenseSets.map(s => `<option value="${esc(s.name)}" ${c && c.license_type === s.name ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}
+            </select></div>
         </div>
         <div class="field"><label>비고</label><textarea class="input" id="f-memo">${c ? esc(c.memo) : ''}</textarea></div>
         ${colorFieldHTML}`,
@@ -767,19 +780,35 @@ window.Companies = (function () {
         if (!name) { toast('업체명을 입력하세요'); return false; }
         const cp = m.querySelector('#f-color').dataset.val;
         const color = (cp == null || cp === '') ? null : (cp[0] === '#' ? cp.toLowerCase() : Number(cp));
+        // 담당자: 마스터 선택값이 정본. 예전 텍스트 입력은 '__legacy'로 그대로 보존.
+        const mgrVal = v('#f-mgr');
+        const picked = managers.find(x => String(x.id) === String(mgrVal));
+        const managerFields = mgrVal === '__legacy'
+          ? { manager_id: null, manager: (c && c.manager) || '' }
+          : { manager_id: picked ? picked.id : null, manager: picked ? picked.name : '' };
+        const license = v('#f-lic');
         const payload = {
           name, rep_name: v('#f-rep').trim(), item: v('#f-item').trim(), contact: v('#f-contact').trim(),
           first_quote_date: v('#f-date') || null, total_quote: Number(v('#f-quote')) || 0,
-          manager: v('#f-mgr').trim(), status: v('#f-status'), memo: v('#f-memo').trim(), color
+          ...managerFields, license_type: license,
+          status: v('#f-status'), memo: v('#f-memo').trim(), color
         };
+        let targetId;
         if (isNew) {
           const cnt = (await DB.list('companies')).length;
           const co = await DB.insert('companies', { ...payload, hidden: false, sort_order: cnt + 1 });
+          targetId = co.id;
           toast('업체를 추가했습니다');
           state.openId = co.id; // 바로 상세로 이동해 항목 설정 유도
         } else {
           await DB.update('companies', c.id, payload);
+          targetId = c.id;
           toast('저장했습니다');
+        }
+        // 인허가 유형이 지정/변경되면 그 묶음의 필요 서류를 요청사항으로(중복 제외)
+        if (license && (isNew || c.license_type !== license)) {
+          const added = await window.ClientShare.applyLicenseSets(targetId, license);
+          if (added) toast(`${license} 필요서류 ${added}건을 요청사항에 추가했습니다`);
         }
         render(root);
       }
