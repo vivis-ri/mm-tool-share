@@ -117,5 +117,6 @@
 
   window.DB.init()
     .then(purgeStartDates)
+    .then(() => window.DB.ensureMasters())
     .then(() => { refreshSidebar(); switchView('diary'); });
 })();

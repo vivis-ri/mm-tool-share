@@ -236,6 +236,7 @@ window.UI = (function () {
         </div>
         <div class="modal-body">${opts.bodyHTML || ''}</div>
         <div class="modal-foot">
+          <span class="modal-hint">Ctrl+Enter로 ${esc(opts.saveLabel || '저장')}</span>
           <button class="btn ghost" data-close>취소</button>
           <button class="btn primary" data-save>${esc(opts.saveLabel || '저장')}</button>
         </div>
@@ -245,10 +246,33 @@ window.UI = (function () {
     function close() { back.remove(); }
     back.addEventListener('click', (e) => { if (e.target === back) close(); });
     back.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', close));
-    back.querySelector('[data-save]').addEventListener('click', async () => {
-      if (opts.onSave) { const r = await opts.onSave(modalEl); if (r === false) return; }
-      close();
+
+    const saveBtn = back.querySelector('[data-save]');
+    let saving = false;
+    async function doSave() {
+      if (saving) return;
+      saving = true;
+      try {
+        if (opts.onSave) { const r = await opts.onSave(modalEl); if (r === false) return; }
+        close();
+      } finally { saving = false; }
+    }
+    saveBtn.addEventListener('click', doSave);
+
+    // 키보드: Ctrl+Enter(=저장) / Esc(=닫기) / 한 줄 입력칸에서 Enter(=저장)
+    // 한글 IME 조합 중 Enter는 "글자 확정"이므로 반드시 무시해야 한다(안 그러면 글자가 잘림).
+    back.addEventListener('keydown', (e) => {
+      if (e.isComposing || e.keyCode === 229) return;
+      if (e.key === 'Escape') { e.preventDefault(); close(); return; }
+      if (e.key !== 'Enter') return;
+      const t = e.target;
+      const tag = t && t.tagName;
+      if (e.ctrlKey || e.metaKey) { e.preventDefault(); doSave(); return; }
+      // textarea는 줄바꿈을 살린다(할 일 여러 건을 줄로 나눠 넣는 방식이라 필수)
+      if (tag === 'TEXTAREA' || (t && t.isContentEditable)) return;
+      if (tag === 'INPUT' || tag === 'SELECT') { e.preventDefault(); doSave(); }
     });
+
     if (opts.onOpen) opts.onOpen(modalEl);
     const first = modalEl.querySelector('input, select, textarea');
     if (first) setTimeout(() => first.focus(), 30);
