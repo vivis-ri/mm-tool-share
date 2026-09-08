@@ -462,20 +462,38 @@ window.ClientShare = (function () {
   }
 
   // ---------- 요청사항 모달 ----------
-  function editRequest(c, rerender, r) {
+  async function editRequest(c, rerender, r) {
     const isNew = !r;
+    const tpls = await DB.list('memo_templates');
     modal({
       title: isNew ? '요청사항 추가' : '요청사항 수정',
       bodyHTML: `
         <div class="field"><label>요청 내용 *</label>
           <input class="input" id="rq-title" placeholder="예: 사업자등록증" value="${r ? esc(r.title) : ''}"></div>
-        <div class="field"><label>안내 문구 <span class="muted">(클라이언트에게 함께 보입니다)</span></label>
-          <input class="input" id="rq-memo" placeholder="예: 사본 가능, 최근 3개월 이내" value="${r ? esc(r.memo || '') : ''}"></div>
+        <div class="field">
+          <label>메모 <span class="muted">(클라이언트에게 함께 보입니다)</span></label>
+          ${tpls.length ? `
+            <select class="input" id="rq-tpl" style="margin-bottom:6px">
+              <option value="">📋 양식 불러오기…</option>
+              ${tpls.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('')}
+            </select>` : ''}
+          <textarea class="input" id="rq-memo" style="min-height:90px" placeholder="예: 사본 가능, 최근 3개월 이내">${r ? esc(r.memo || '') : ''}</textarea>
+        </div>
         <div class="field"><label>기한 <span class="muted">(선택)</span></label>
           <input class="input" id="rq-due" type="date" value="${r ? (r.due_date || '') : ''}"></div>
         <label class="chk"><input type="checkbox" id="rq-imp" ${r && r.important ? 'checked' : ''}>
           <span>★ 중요 <em>클라이언트 화면에서 접지 않고 먼저 보입니다</em></span></label>`,
       saveLabel: isNew ? '추가' : '저장',
+      onOpen: (m) => {
+        m.querySelector('#rq-tpl')?.addEventListener('change', (e) => {
+          const tpl = tpls.find(t => String(t.id) === e.target.value);
+          e.target.value = '';
+          if (!tpl) return;
+          const ta = m.querySelector('#rq-memo');
+          ta.value = ta.value.trim() ? ta.value.replace(/\s+$/, '') + '\n' + (tpl.body || '') : (tpl.body || '');
+          ta.focus();
+        });
+      },
       onSave: async (m) => {
         const title = m.querySelector('#rq-title').value.trim();
         if (!title) { toast('요청 내용을 입력하세요'); return false; }

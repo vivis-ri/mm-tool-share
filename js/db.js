@@ -19,7 +19,7 @@
     'routines', 'task_checks',
     // 클라이언트 공유 대시보드용
     'managers', 'delivery_categories', 'delivery_templates', 'deliveries',
-    'request_sets', 'request_templates', 'requests'
+    'request_sets', 'request_templates', 'requests', 'memo_templates'
   ];
 
   // ---------- 로컬 어댑터 (Electron=파일 / 웹=localStorage) ----------
@@ -196,7 +196,12 @@
         '로고 원본(AI/PNG)', '제품 상세 정보', '제품 실물 사진', '대표자 프로필', '인증서·시험성적서'] }
     ];
 
-    return { deliverySets, requestSets };
+    // 요청사항 메모 양식 — 빈칸만 채우면 되는 정해진 형식
+    const memoTemplates = [
+      { name: 'CS 정보', body: '이메일 : \n전화번호 : \n문의 가능시간 : ' }
+    ];
+
+    return { deliverySets, requestSets, memoTemplates };
   }
 
   // 기존 사용자 데이터에 없는 마스터만 이름 기준으로 채워 넣는다.
@@ -241,6 +246,15 @@
         if (rts.some(x => String(x.set_id) === String(parent.id) && x.name === doc)) continue;
         await window.DB.insert('request_templates', { set_id: parent.id, name: doc, memo: '', sort_order: i });
       }
+    }
+
+    // --- 메모 양식 ---
+    const mts = await window.DB.list('memo_templates');
+    const mtByName = new Set(mts.map(t => t.name));
+    let mtOrder = mts.reduce((n, t) => Math.max(n, Number(t.sort_order) || 0), 0);
+    for (const t of md.memoTemplates) {
+      if (mtByName.has(t.name)) continue;
+      await window.DB.insert('memo_templates', { name: t.name, body: t.body, sort_order: ++mtOrder });
     }
   }
 
@@ -318,7 +332,8 @@
     const out = {
       service_templates: st, process_templates: pt, companies, services, processes, routines, task_checks: [],
       managers: [], deliveries: [], requests: [],
-      delivery_categories: [], delivery_templates: [], request_sets: [], request_templates: []
+      delivery_categories: [], delivery_templates: [], request_sets: [], request_templates: [],
+      memo_templates: []
     };
     return out;
   }

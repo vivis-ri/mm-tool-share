@@ -151,7 +151,7 @@ ul { list-style: none; }
 .req-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .req-t { font-size: 14px; font-weight: 600; }
 .req.done .req-t { color: var(--ink-45); text-decoration: line-through; }
-.req-m { font-size: 11.5px; color: var(--ink-45); }
+.req-m { font-size: 11.5px; color: var(--ink-45); white-space: pre-line; }
 .req-due { font-size: 12px; font-weight: 700; color: var(--orange-deep); white-space: nowrap; }
 
 /* 요청사항 아코디언 */

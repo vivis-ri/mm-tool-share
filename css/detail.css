@@ -155,7 +155,7 @@ body.readonly .stage-card:hover { transform: none; box-shadow: none; }
 .req-chk input { width: 17px; height: 17px; accent-color: var(--orange); cursor: pointer; }
 .req-main { flex: 1; min-width: 0; }
 .req-title { font-size: 14px; font-weight: 600; }
-.req-memo { font-size: 11.5px; color: var(--ink-45); margin-top: 2px; }
+.req-memo { font-size: 11.5px; color: var(--ink-45); margin-top: 2px; white-space: pre-line; }
 .req-due { font-size: 12px; color: var(--orange-deep); font-weight: 700; white-space: nowrap; }
 .req-tools { display: flex; gap: 1px; opacity: 0; transition: opacity .12s; }
 .req-row:hover .req-tools { opacity: 1; }

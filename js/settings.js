@@ -12,6 +12,7 @@ window.Settings = (function () {
     { id: 'service', label: '서비스 항목', sub: '서비스 항목 노출 순서를 정해두면 프로젝트 현황과 업체 상세에서 같은 순서로 표시됩니다.' },
     { id: 'managers', label: '담당자', sub: '담당자를 등록해두면 업체와 프로세스 단계에서 선택 한 번으로 채워집니다. 연락처는 클라이언트 대시보드에도 표시됩니다.' },
     { id: 'reqsets', label: '필요서류 묶음', sub: '인허가 유형이나 서비스 항목별로 필요 서류를 묶어두면, 업체에 지정할 때 요청사항 체크리스트가 자동으로 만들어집니다.' },
+    { id: 'memotpl', label: '메모 양식', sub: '요청사항에 메모를 달 때 바로 불러올 수 있는 양식입니다. CS 정보처럼 칸이 정해진 메모를 만들어두면 빈칸만 채우면 됩니다.' },
     { id: 'delcats', label: '작업물 묶음', sub: '작업물 전달 기록의 분류이자, 시안 진행 순서 묶음입니다. 단계를 넣어두면 업체에 한 번에 깔 수 있습니다.' }
   ];
 
@@ -26,6 +27,7 @@ window.Settings = (function () {
       tab === 'service' ? await serviceBody() :
       tab === 'managers' ? await managersBody() :
       tab === 'reqsets' ? await reqSetsBody() :
+      tab === 'memotpl' ? await memoTplBody() :
       await delCatsBody();
 
     root.innerHTML = `
@@ -49,6 +51,7 @@ window.Settings = (function () {
     if (tab === 'service') bindService(root);
     else if (tab === 'managers') bindManagers(root);
     else if (tab === 'reqsets') bindReqSets(root);
+    else if (tab === 'memotpl') bindMemoTpl(root);
     else bindDelCats(root);
   }
 
@@ -544,7 +547,80 @@ window.Settings = (function () {
   }
 
   // ============================================================
-  //  4. 작업물 카테고리
+  //  4. 메모 양식
+  // ============================================================
+  async function memoTplBody() {
+    const rows = await DB.list('memo_templates');
+    return `
+      <div class="set-toolbar only-edit">
+        <button class="btn primary" id="add-memotpl">+ 메모 양식 추가</button>
+      </div>
+      ${rows.length ? `
+        <div class="mst-list" data-memotpl-list>
+          ${rows.map(t => `
+            <div class="mst-row card" data-id="${t.id}">
+              <span class="drag-handle only-edit" title="끌어서 순서 변경">⠿</span>
+              <span class="mst-name">${esc(t.name)}</span>
+              <span class="mst-sub mst-pre">${esc((t.body || '').split(/\r?\n/)[0] || '')}</span>
+              <span class="mst-tools only-edit">
+                <button class="icon-btn xs" data-edit>✎</button>
+                <button class="icon-btn xs" data-del>✕</button>
+              </span>
+            </div>`).join('')}
+        </div>` : empty('📝', '등록된 메모 양식이 없습니다.<br><b>+ 메모 양식 추가</b>로 시작하세요.')}
+      ${hint('업체 상세의 <b>요청사항</b> 메모를 쓸 때 여기 등록한 양식을 <b>양식 불러오기</b>로 그대로 가져와 빈칸만 채울 수 있습니다. 클라이언트 대시보드에도 그대로 보입니다.')}`;
+  }
+
+  function bindMemoTpl(root) {
+    root.querySelector('#add-memotpl')?.addEventListener('click', () => editMemoTpl(root));
+    const list = root.querySelector('[data-memotpl-list]');
+    if (list) DragSort.enable(list, {
+      itemSelector: '.mst-row', handleSelector: '.drag-handle',
+      onReorder: async (ids) => {
+        for (let i = 0; i < ids.length; i++) await DB.update('memo_templates', ids[i], { sort_order: i + 1 });
+        render(root);
+      }
+    });
+    root.querySelectorAll('.mst-row').forEach(rowEl => {
+      const id = rowEl.dataset.id;
+      rowEl.querySelector('[data-edit]')?.addEventListener('click', async () => {
+        editMemoTpl(root, (await DB.list('memo_templates', { id }))[0]);
+      });
+      rowEl.querySelector('[data-del]')?.addEventListener('click', () => {
+        confirm('이 메모 양식을 삭제할까요? 이미 채워 넣은 요청사항 메모는 그대로 남습니다.', async () => {
+          await DB.remove('memo_templates', id); toast('삭제했습니다'); render(root);
+        }, true);
+      });
+    });
+  }
+
+  function editMemoTpl(root, t) {
+    const isNew = !t;
+    modal({
+      title: isNew ? '메모 양식 추가' : '메모 양식 수정',
+      bodyHTML: `
+        <div class="field"><label>양식 이름</label>
+          <input class="input" id="f-mtname" placeholder="예: CS 정보" value="${t ? esc(t.name) : ''}"></div>
+        <div class="field"><label>기본 내용 <span class="muted">(요청사항 메모에 그대로 채워집니다)</span></label>
+          <textarea class="input" id="f-mtbody" style="min-height:110px" placeholder="이메일 : ${'\n'}전화번호 : ${'\n'}문의 가능시간 : ">${t ? esc(t.body || '') : ''}</textarea></div>`,
+      saveLabel: isNew ? '추가' : '저장',
+      onSave: async (m) => {
+        const name = m.querySelector('#f-mtname').value.trim();
+        const body = m.querySelector('#f-mtbody').value;
+        if (!name) { toast('양식 이름을 입력하세요'); return false; }
+        if (isNew) {
+          const cnt = (await DB.list('memo_templates')).length;
+          await DB.insert('memo_templates', { name, body, sort_order: cnt + 1 });
+        } else {
+          await DB.update('memo_templates', t.id, { name, body });
+        }
+        toast('저장했습니다'); render(root);
+      }
+    });
+  }
+
+  // ============================================================
+  //  5. 작업물 카테고리
   // ============================================================
   async function delCatsBody() {
     const cats = await DB.list('delivery_categories');

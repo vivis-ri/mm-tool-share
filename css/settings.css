@@ -67,6 +67,7 @@
 .mst-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
 .mst-name { font-size: 14.5px; font-weight: 700; min-width: 120px; }
 .mst-sub { font-size: 13px; color: var(--ink-45); }
+.mst-pre { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mst-tools { margin-left: auto; display: flex; gap: 1px; opacity: 0; transition: opacity .12s; }
 .mst-row:hover .mst-tools { opacity: 1; }
 
