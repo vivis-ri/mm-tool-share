@@ -139,6 +139,21 @@ window.UI = (function () {
     });
   }
 
+  // 업체 안 서비스 항목 정렬: 견적 차수 → 차수 안 순서(추가한 순서·직접 정리한 순서) → 추가 시각
+  function addedOrderSorter(quotes) {
+    const no = {};
+    (quotes || []).forEach(q => { no[String(q.id)] = Number(q.no) || 0; });
+    const day = s => String(s.created_at || '').slice(0, 10);
+    return (a, b) => {
+      const qa = no[String(a.quote_id)], qb = no[String(b.quote_id)];
+      if (qa != null && qb != null) { if (qa !== qb) return qa - qb; }
+      else { const d = day(a).localeCompare(day(b)); if (d) return d; }
+      const so = (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0);
+      if (so) return so;
+      return String(a.created_at || '').localeCompare(String(b.created_at || ''));
+    };
+  }
+
   function serviceSorter(templates) {
     const ordered = sortServiceTemplates(templates);
     const byTemplateId = {};
@@ -328,6 +343,6 @@ window.UI = (function () {
     statusClass, badge, companyTone, companyStyle, companyDotStyle, setCompanyColors, companyTones: COMPANY_TONES,
     esc, money, moneyShort, fmtDate, statusOptions, toast, modal, confirm: confirmModal, statusPicker,
     vatParts, moneyVatText, moneyVatHTML,
-    serviceKey, defaultServiceOrder, hasManualServiceOrder, sortServiceTemplates, serviceSorter
+    serviceKey, defaultServiceOrder, hasManualServiceOrder, sortServiceTemplates, serviceSorter, addedOrderSorter
   };
 })();

@@ -141,9 +141,8 @@ window.Companies = (function () {
 
     const companies = (await DB.list('companies')).sort(sortByQuoteDate);
     UI.setCompanyColors(companies);
-    const serviceTemplates = await DB.list('service_templates');
-    const serviceSorter = UI.serviceSorter(serviceTemplates);
-    const services = (await DB.list('services')).sort(serviceSorter);
+    await window.Detail.migrateAllQuotes();
+    const services = (await DB.list('services')).sort(UI.addedOrderSorter(await DB.list('quotes')));
     const processes = await DB.list('processes');
 
     // 그룹핑
@@ -653,6 +652,7 @@ window.Companies = (function () {
       for (const p of ps) await DB.remove('processes', p.id);
       await DB.remove('services', s.id);
     }
+    for (const q of await DB.list('quotes', { company_id: id })) await DB.remove('quotes', q.id);
     await DB.remove('companies', id);
     if (state.openId === id) state.openId = null;
     if (window.App && window.App.refreshSidebar) window.App.refreshSidebar();

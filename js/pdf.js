@@ -209,7 +209,7 @@ window.PDF = (function () {
     const companies = (await DB.list('companies')).filter(c => !isHiddenCompany(c)).sort(sortByQuoteDate);
     UI.setCompanyColors(companies);
     const templates = await DB.list('service_templates');
-    const services = (await DB.list('services')).sort(UI.serviceSorter(templates));
+    const services = (await DB.list('services')).sort(UI.addedOrderSorter(await DB.list('quotes')));
     const processes = await DB.list('processes');
     const svcBy = {}; services.forEach(s => { (svcBy[s.company_id] = svcBy[s.company_id] || []).push(s); });
     const procBySvc = {}; processes.forEach(p => { (procBySvc[p.service_id] = procBySvc[p.service_id] || []).push(p); });
@@ -298,7 +298,7 @@ window.PDF = (function () {
   async function company(id) {
     const c = (await DB.list('companies', { id }))[0];
     const serviceTemplates = await DB.list('service_templates');
-    const svcs = (await DB.list('services', { company_id: id })).sort(UI.serviceSorter(serviceTemplates));
+    const svcs = (await DB.list('services', { company_id: id })).sort(UI.addedOrderSorter(await DB.list('quotes', { company_id: id })));
     let inner = `<h1>${esc(c.name)}</h1><div class="sub">${esc(c.rep_name)} · ${esc(c.item)} · ${esc(c.contact)}</div>
       <table><tbody>
         <tr><th>대표자</th><td>${esc(c.rep_name)}</td><th>아이템</th><td>${esc(c.item)}</td></tr>

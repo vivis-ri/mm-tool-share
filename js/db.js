@@ -15,7 +15,7 @@
 
   const TABLES = [
     'service_templates', 'process_templates',
-    'companies', 'services', 'processes',
+    'companies', 'quotes', 'services', 'processes',
     'routines', 'task_checks',
     // 클라이언트 공유 대시보드용
     'managers', 'delivery_categories', 'delivery_templates', 'deliveries',

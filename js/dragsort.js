@@ -57,5 +57,64 @@ window.DragSort = (function () {
     });
   }
 
-  return { enable };
+  // 여러 칸(예: 견적 차수별 목록) 사이를 오가며 옮길 수 있는 버전.
+  // onReorder([{ container, ids }]) — 칸마다 새 순서를 넘겨준다.
+  function enableGroup(containers, opts) {
+    if (!containers || !containers.length || (window.DB && window.DB.READONLY)) return;
+    const { itemSelector, handleSelector, onReorder } = opts;
+    let dragEl = null;
+    const own = (el) => containers.includes(el.parentElement);
+
+    containers.forEach(container => {
+      [...container.children].filter(el => el.matches(itemSelector)).forEach(item => {
+        const h = handleSelector ? item.querySelector(handleSelector) : null;
+        item.draggable = !h;
+        if (h) {
+          h.style.cursor = 'grab';
+          h.addEventListener('mousedown', () => { item.draggable = true; });
+          h.addEventListener('mouseup', () => { item.draggable = false; });
+        }
+        item.addEventListener('dragstart', (e) => {
+          if (e.target !== item || !item.draggable) return;
+          dragEl = item; item.classList.add('dragging');
+          containers.forEach(c => c.classList.add('drop-ready'));
+          e.dataTransfer.effectAllowed = 'move';
+          try { e.dataTransfer.setData('text/plain', item.dataset.id || ''); } catch {}
+        });
+        item.addEventListener('dragend', (e) => {
+          if (e.target !== item) return;
+          item.classList.remove('dragging');
+          if (h) item.draggable = false;
+          containers.forEach(c => c.classList.remove('drop-ready'));
+          if (dragEl) {
+            dragEl = null;
+            if (onReorder) onReorder(containers.map(c => ({
+              container: c,
+              ids: [...c.children].filter(el => el.matches(itemSelector)).map(el => el.dataset.id)
+            })));
+          }
+        });
+      });
+
+      container.addEventListener('dragover', (e) => {
+        if (!dragEl) return;
+        e.preventDefault();
+        const els = [...container.children].filter(el => el.matches(itemSelector) && el !== dragEl);
+        let after = null, best = -Infinity;
+        for (const child of els) {
+          const box = child.getBoundingClientRect();
+          const offset = e.clientY - box.top - box.height / 2;
+          if (offset < 0 && offset > best) { best = offset; after = child; }
+        }
+        if (after) container.insertBefore(dragEl, after);
+        else {
+          const tail = container.querySelector(':scope > [data-drop-tail]');
+          if (tail) container.insertBefore(dragEl, tail); else container.appendChild(dragEl);
+        }
+      });
+    });
+    return own;
+  }
+
+  return { enable, enableGroup };
 })();
