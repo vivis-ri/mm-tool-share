@@ -61,9 +61,25 @@ window.DragSort = (function () {
   // onReorder([{ container, ids }]) — 칸마다 새 순서를 넘겨준다.
   function enableGroup(containers, opts) {
     if (!containers || !containers.length || (window.DB && window.DB.READONLY)) return;
-    const { itemSelector, handleSelector, onReorder } = opts;
+    // dropZoneFor(container): 그 칸으로 보내는 추가 표적(예: 접힌 차수의 머리줄). 위에 놓으면 그 칸 맨 뒤로.
+    const { itemSelector, handleSelector, onReorder, dropZoneFor } = opts;
     let dragEl = null;
-    const own = (el) => containers.includes(el.parentElement);
+    const appendTo = (container) => {
+      const tail = container.querySelector(':scope > [data-drop-tail]');
+      if (tail) container.insertBefore(dragEl, tail); else container.appendChild(dragEl);
+    };
+    if (dropZoneFor) containers.forEach(container => {
+      const zone = dropZoneFor(container);
+      if (!zone) return;
+      zone.addEventListener('dragover', (e) => {
+        if (!dragEl) return;
+        e.preventDefault();
+        zone.classList.add('drop-hover');
+        if (dragEl.parentElement !== container) appendTo(container);
+      });
+      zone.addEventListener('dragleave', () => zone.classList.remove('drop-hover'));
+      zone.addEventListener('drop', (e) => { e.preventDefault(); zone.classList.remove('drop-hover'); });
+    });
 
     containers.forEach(container => {
       [...container.children].filter(el => el.matches(itemSelector)).forEach(item => {
@@ -76,8 +92,14 @@ window.DragSort = (function () {
         }
         item.addEventListener('dragstart', (e) => {
           if (e.target !== item || !item.draggable) return;
-          dragEl = item; item.classList.add('dragging');
-          containers.forEach(c => c.classList.add('drop-ready'));
+          dragEl = item;
+          // 레이아웃을 바꾸는 클래스는 한 박자 뒤에(드래그 시작 직후 DOM을 바꾸면 크롬이 드래그를 취소함)
+          setTimeout(() => {
+            if (dragEl !== item) return;
+            item.classList.add('dragging');
+            containers.forEach(c => c.classList.add('drop-ready'));
+            document.body.classList.add('is-dragging-group');
+          }, 0);
           e.dataTransfer.effectAllowed = 'move';
           try { e.dataTransfer.setData('text/plain', item.dataset.id || ''); } catch {}
         });
@@ -86,6 +108,7 @@ window.DragSort = (function () {
           item.classList.remove('dragging');
           if (h) item.draggable = false;
           containers.forEach(c => c.classList.remove('drop-ready'));
+          document.body.classList.remove('is-dragging-group');
           if (dragEl) {
             dragEl = null;
             if (onReorder) onReorder(containers.map(c => ({
@@ -108,12 +131,10 @@ window.DragSort = (function () {
         }
         if (after) container.insertBefore(dragEl, after);
         else {
-          const tail = container.querySelector(':scope > [data-drop-tail]');
-          if (tail) container.insertBefore(dragEl, tail); else container.appendChild(dragEl);
+          appendTo(container);
         }
       });
     });
-    return own;
   }
 
   return { enable, enableGroup };

@@ -316,3 +316,23 @@ body.readonly .stage-card:hover .stage-idx .si-g { display: none; }
   .ord-amt { display: none; }
   .ord-steps { padding-left: 14px; }
 }
+
+/* ---------- 평소 화면에서 항목 끌어 옮기기 ---------- */
+.svc-handle { width: 24px; height: 24px; margin-left: -6px; display: grid; place-items: center; border-radius: 7px; color: var(--ink-45); font-size: 15px; cursor: grab; flex-shrink: 0; }
+.svc-handle:hover { background: var(--orange-soft); color: var(--orange-deep); }
+.svc-handle:active { cursor: grabbing; }
+.q-drop-tail { display: none; }
+/* 끄는 동안: 모든 항목을 제목 줄만 남기고 접어서 옮길 곳이 한눈에 보이게 */
+.q-body.drop-ready .svc-block .stage-board { display: none; }
+.q-body.drop-ready .svc-block .svc-head { margin-bottom: 0; }
+.q-body.drop-ready .svc-block { padding: 10px 14px; }
+.svc-block.dragging { opacity: .45; }
+.q-body.drop-ready { border-left-color: var(--orange); }
+.q-body.drop-ready > .q-drop-tail { display: block; font-size: 12.5px; font-weight: 600; color: var(--orange-deep); text-align: center; padding: 12px; border: 1.5px dashed var(--orange); border-radius: 10px; background: var(--orange-soft); }
+/* 접힌 차수도 끄는 동안엔 놓을 자리만 열어 둠 */
+.q-group:not(.is-open) .q-body.drop-ready { display: flex; }
+.q-group:not(.is-open) .q-body.drop-ready > .svc-block:not(.dragging),
+.q-group:not(.is-open) .q-body.drop-ready > .q-empty { display: none; }
+.q-body.drop-ready > .q-empty { display: none; }
+.is-dragging-group .q-head { border-style: dashed; }
+.q-head.drop-hover { border: 1.5px solid var(--orange); background: var(--orange-soft); }

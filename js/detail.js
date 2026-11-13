@@ -123,9 +123,10 @@ window.Detail = (function () {
     return `
       <section class="q-group ${open ? 'is-open' : ''}" data-qid="${q.id}">
         ${head}
-        <div class="q-body">
+        <div class="q-body" data-qid="${q.id}">
           ${svcs.length ? svcs.map(s => svcBlock(s, procBy[s.id] || [])).join('')
-            : `<div class="q-empty">이 차수에 항목이 없습니다. <b>⇅ 순서 정리</b>에서 항목을 옮겨오거나, 비어 있으면 ✎에서 지울 수 있어요.</div>`}
+            : `<div class="q-empty">이 차수에 항목이 없습니다. 다른 차수의 항목을 ⠿로 끌어오거나, 비어 있으면 ✎에서 지울 수 있어요.</div>`}
+          <div class="q-drop-tail only-edit" data-drop-tail>여기에 놓으면 ${q.no}차 견적으로 옮겨져요</div>
         </div>
       </section>`;
   }
@@ -260,9 +261,10 @@ window.Detail = (function () {
     const pct = procs.length ? Math.round(done / procs.length * 100) : 0;
     const current = procs.find(p => ACTIVE_STATUSES.includes(p.status));
     return `
-      <div class="svc-block card" data-sid="${s.id}">
+      <div class="svc-block card" data-sid="${s.id}" data-id="${s.id}">
         <div class="svc-head">
           <div class="svc-head-l">
+            <span class="svc-handle only-edit" title="끌어서 순서 변경 · 다른 견적 차수로 이동">⠿</span>
             <span class="dot"></span>
             <b>${esc(s.name)}</b>
             ${badge(s.status)}
@@ -273,7 +275,7 @@ window.Detail = (function () {
             <span class="mini-prog"><span style="width:${pct}%"></span></span>
             <span class="mini-prog-t">${pct}%</span>
             <button class="icon-btn only-edit" data-svc-eye title="${s.client_visible === false ? '클라이언트에게 숨김' : '클라이언트에게 보임'}">${s.client_visible === false ? '🙈' : '👁'}</button>
-            <button class="icon-btn only-edit" data-edit-svc title="금액/상태 수정">✎</button>
+            <button class="icon-btn only-edit" data-edit-svc title="금액·상태·견적 차수 수정">✎</button>
             <button class="icon-btn only-edit" data-del-svc title="항목 삭제">🗑</button>
           </div>
         </div>
@@ -357,29 +359,22 @@ window.Detail = (function () {
       g.querySelector('[data-q-edit]')?.addEventListener('click', () => editQuote(root, c, back, qid));
     });
 
+    // 평소 화면: 항목 머리의 ⠿를 잡고 다른 견적 차수로(또는 같은 차수 안에서) 이동
+    if (!view.orderMode) {
+      const bodies = [...root.querySelectorAll('.q-body')];
+      DragSort.enableGroup(bodies, {
+        itemSelector: '.svc-block', handleSelector: '.svc-head .svc-handle',
+        dropZoneFor: (body) => body.closest('.q-group')?.querySelector('.q-head'),
+        onReorder: (groups) => saveServiceGroups(root, c, back, groups)
+      });
+    }
+
     // 순서 정리 모드: 항목(차수 사이 이동 가능) · 단계 드래그
     if (view.orderMode) {
       const lists = [...root.querySelectorAll('.ord-list')];
       DragSort.enableGroup(lists, {
         itemSelector: '.ord-row', handleSelector: '.ord-line > .ord-handle',
-        onReorder: async (groups) => {
-          const svcs = await DB.list('services', { company_id: c.id });
-          const byId = {}; svcs.forEach(s => { byId[String(s.id)] = s; });
-          let moved = 0;
-          for (const { container, ids } of groups) {
-            const qid = container.dataset.qid;
-            for (let i = 0; i < ids.length; i++) {
-              const s = byId[String(ids[i])];
-              if (!s) continue;
-              const patch = {};
-              if (String(s.quote_id) !== String(qid)) { patch.quote_id = qid; moved++; }
-              if (Number(s.sort_order) !== i + 1) patch.sort_order = i + 1;
-              if (Object.keys(patch).length) await DB.update('services', s.id, patch);
-            }
-          }
-          toast(moved ? '항목을 다른 견적 차수로 옮겼습니다' : '항목 순서를 변경했습니다');
-          render(root, c.id, back);
-        }
+        onReorder: (groups) => saveServiceGroups(root, c, back, groups)
       });
       root.querySelectorAll('.ord-row').forEach(row => {
         row.querySelector('[data-ord-expand]')?.addEventListener('click', () => {
@@ -677,21 +672,59 @@ window.Detail = (function () {
     });
   }
 
-  function editService(root, c, back, s) {
+  // 드래그 결과 저장: 칸(견적 차수)마다 항목 순서와 소속 차수를 반영
+  async function saveServiceGroups(root, c, back, groups) {
+    const svcs = await DB.list('services', { company_id: c.id });
+    const byId = {}; svcs.forEach(s => { byId[String(s.id)] = s; });
+    let moved = 0;
+    for (const { container, ids } of groups) {
+      const qid = container.dataset.qid;
+      for (let i = 0; i < ids.length; i++) {
+        const s = byId[String(ids[i])];
+        if (!s) continue;
+        const patch = {};
+        if (String(s.quote_id) !== String(qid)) { patch.quote_id = qid; moved++; }
+        if (Number(s.sort_order) !== i + 1) patch.sort_order = i + 1;
+        if (Object.keys(patch).length) await DB.update('services', s.id, patch);
+      }
+    }
+    if (moved) {
+      // 옮겨간 차수는 펼쳐서 바로 보이게
+      const target = groups.find(g => g.ids.some(id => String(byId[String(id)]?.quote_id) !== String(g.container.dataset.qid)));
+      if (target) writeOpen(target.container.dataset.qid, true);
+    }
+    toast(moved ? '항목을 다른 견적 차수로 옮겼습니다' : '항목 순서를 변경했습니다');
+    render(root, c.id, back);
+  }
+
+  async function editService(root, c, back, s) {
+    const quotes = (await DB.list('quotes', { company_id: c.id })).sort((a, b) => (a.no || 0) - (b.no || 0));
     modal({
       title: '항목 수정',
       bodyHTML: `
         <div class="field"><label>항목명</label><input class="input" id="s-name" value="${esc(s.name)}"></div>
+        <div class="field"><label>견적 차수 <span class="muted">(바꾸면 그 차수의 맨 뒤로 옮겨져요)</span></label>
+          <select class="select" id="s-quote">
+            ${quotes.map(q => `<option value="${q.id}" ${String(q.id) === String(s.quote_id) ? 'selected' : ''}>${q.no}차 견적 · ${fmtDay(q.quote_date)}${q.memo ? ' · ' + esc(q.memo) : ''}</option>`).join('')}
+          </select></div>
         <div class="grid-2">
           <div class="field"><label>받은 금액 (원, VAT 포함)</label><input class="input" id="s-amt" type="number" value="${s.amount}"><span class="help-text">${UI.moneyVatText(s.amount)}</span></div>
           <div class="field"><label>상태</label><select class="select" id="s-status">${UI.statusOptions(s.status)}</select></div>
         </div>`,
       onSave: async (m) => {
-        await DB.update('services', s.id, {
+        const patch = {
           name: m.querySelector('#s-name').value.trim() || s.name,
           amount: Number(m.querySelector('#s-amt').value) || 0,
           status: m.querySelector('#s-status').value
-        });
+        };
+        const qid = m.querySelector('#s-quote')?.value;
+        if (qid && String(qid) !== String(s.quote_id)) {
+          const inTarget = (await DB.list('services', { company_id: c.id })).filter(x => String(x.quote_id) === String(qid));
+          patch.quote_id = qid;
+          patch.sort_order = inTarget.reduce((n, x) => Math.max(n, Number(x.sort_order) || 0), 0) + 1;
+          writeOpen(qid, true);
+        }
+        await DB.update('services', s.id, patch);
         await syncCompanyQuote(c.id);
         await syncCompanyStatus(c.id, { syncServices: false });
         toast('저장했습니다'); render(root, c.id, back);
