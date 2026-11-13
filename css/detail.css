@@ -336,3 +336,10 @@ body.readonly .stage-card:hover .stage-idx .si-g { display: none; }
 .q-body.drop-ready > .q-empty { display: none; }
 .is-dragging-group .q-head { border-style: dashed; }
 .q-head.drop-hover { border: 1.5px solid var(--orange); background: var(--orange-soft); }
+
+/* 끄는 동안 마우스를 따라다니는 미리보기(제목 줄만) */
+.drag-ghost { background: var(--surface); border: 1.5px solid var(--orange); border-radius: 12px; padding: 10px 14px; box-shadow: 0 12px 28px rgba(42, 43, 41, .18); opacity: .96; }
+.drag-ghost.ord-line { padding: 9px 12px 9px 8px; }
+.drag-ghost .svc-head-r { display: none; }
+body.is-dragging-group, body.is-dragging-group * { cursor: grabbing !important; user-select: none; }
+.svc-block.dragging, .ord-row.dragging { opacity: .35; border-style: dashed; }

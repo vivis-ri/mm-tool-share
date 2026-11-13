@@ -363,7 +363,7 @@ window.Detail = (function () {
     if (!view.orderMode) {
       const bodies = [...root.querySelectorAll('.q-body')];
       DragSort.enableGroup(bodies, {
-        itemSelector: '.svc-block', handleSelector: '.svc-head .svc-handle',
+        itemSelector: '.svc-block', handleSelector: '.svc-head .svc-handle', ghostSelector: '.svc-head',
         dropZoneFor: (body) => body.closest('.q-group')?.querySelector('.q-head'),
         onReorder: (groups) => saveServiceGroups(root, c, back, groups)
       });
@@ -373,7 +373,7 @@ window.Detail = (function () {
     if (view.orderMode) {
       const lists = [...root.querySelectorAll('.ord-list')];
       DragSort.enableGroup(lists, {
-        itemSelector: '.ord-row', handleSelector: '.ord-line > .ord-handle',
+        itemSelector: '.ord-row', handleSelector: '.ord-line > .ord-handle', ghostSelector: '.ord-line',
         onReorder: (groups) => saveServiceGroups(root, c, back, groups)
       });
       root.querySelectorAll('.ord-row').forEach(row => {
